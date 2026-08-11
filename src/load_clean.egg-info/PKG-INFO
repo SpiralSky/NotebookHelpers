@@ -1,0 +1,7 @@
+Metadata-Version: 2.4
+Name: load-clean
+Version: 0.1.0
+Summary: IPython magic for clean source imports
+Requires-Python: >=3.10
+Requires-Dist: ipython
+Requires-Dist: ast-comments
