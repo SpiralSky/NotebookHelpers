@@ -1,2 +1,3 @@
+build
 load_clean
-tests
+load_clean_tools

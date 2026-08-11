@@ -1,2 +1,7 @@
 ipython
 ast-comments
+pytest>=9.1.1
+
+[tools]
+jupytext>=1.19.5
+nbformat>=5.11.0

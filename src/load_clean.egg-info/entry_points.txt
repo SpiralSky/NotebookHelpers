@@ -1,0 +1,2 @@
+[console_scripts]
+load-clean-build = load_clean_tools.cli:main

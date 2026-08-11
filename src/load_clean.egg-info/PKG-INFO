@@ -1,7 +1,13 @@
 Metadata-Version: 2.4
 Name: load-clean
-Version: 0.1.0
-Summary: IPython magic for clean source imports
+Version: 0.0.1
+Summary: Python package
 Requires-Python: >=3.10
+License-File: LICENSE.md
 Requires-Dist: ipython
 Requires-Dist: ast-comments
+Requires-Dist: pytest>=9.1.1
+Provides-Extra: tools
+Requires-Dist: jupytext>=1.19.5; extra == "tools"
+Requires-Dist: nbformat>=5.11.0; extra == "tools"
+Dynamic: license-file

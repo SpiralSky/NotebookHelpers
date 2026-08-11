@@ -15,8 +15,17 @@ requires-python = ">=3.10"
 dependencies = [
     "ipython",
     "ast-comments",
+    "pytest>=9.1.1",
 ]
 
+[project.optional-dependencies]
+tools = [
+    "jupytext>=1.19.5",
+    "nbformat>=5.11.0",
+]
+
+[project.scripts]
+load-clean-build = "load_clean_tools.cli:main"
 
 [tool.setuptools.packages.find]
 where = [
@@ -26,4 +35,5 @@ where = [
 [dependency-groups]
 dev = [
     "build>=1.5.0",
+    "pytest>=8.0.0",
 ]

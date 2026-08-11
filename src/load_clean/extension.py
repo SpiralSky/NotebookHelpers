@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Any
+
 from IPython import get_ipython
 from IPython.core.magic import Magics, cell_magic, magics_class
 
@@ -12,47 +15,38 @@ from .slicer import SourceSlicer
 
 class LoadCleanState:
     """
-    Stores session-level state for %%load_clean.
+    Stores session state shared between %%load_clean executions.
 
-    The registry tracks names imported by previous %%load_clean
-    executions so dependency checking can resolve references
-    across notebook cells.
+    Attributes:
+        loaded_registry:
+            Names successfully loaded by previous cells.
     """
 
     def __init__(self) -> None:
-        """Initialize an empty loaded-name registry."""
+        """Initialize an empty load registry."""
         self.loaded_registry: set[str] = set()
 
 
 @magics_class
 class LoadCleanMagics(Magics):
     """
-    IPython magic implementation for loading clean source fragments.
-
-    Supports:
-
-        %%load_clean
-        import module
-
-    which is normalized into:
-
-        from module import *
+    Implements the %%load_clean IPython cell magic.
 
     Modes:
 
         default:
-            Load full source and display exported names.
-
-        skeleton:
-            Load definitions with bodies replaced by pass.
+            Execute the module import normally.
 
         inline:
-            Load full source without rendering export list.
+            Replace import with extracted source.
+
+        skeleton:
+            Replace import with definitions containing empty bodies.
     """
 
-    def __init__(self, shell) -> None:
+    def __init__(self, shell: Any) -> None:
         """
-        Initialize the magic extension.
+        Initialize magic state.
 
         Args:
             shell:
@@ -63,34 +57,33 @@ class LoadCleanMagics(Magics):
 
 
     @cell_magic
-    def load_clean(self, line: str, cell: str = "") -> None:
+    def load_clean(
+        self,
+        line: str,
+        cell: str = "",
+    ) -> None:
         """
-        Load selected source from a Python module.
-
-        The first import statement in the cell determines
-        which module and objects are loaded.
+        Load Python definitions from a module.
 
         Example:
 
-            %%load_clean
-
+            %%load_clean inline
             import src.sorters.insertion_sort
-
-        Automatically becomes:
-
-            from src.sorters.insertion_sort import *
 
         Args:
             line:
-                Magic arguments such as skeleton/default/inline.
+                Magic arguments.
 
             cell:
-                Cell body containing the import statement.
+                Cell contents containing the import statement.
         """
         mode, import_line = parse_line(line, cell)
 
         if mode not in VALID_MODES:
-            print(f"Unknown mode {mode!r}. Expected {sorted(VALID_MODES)}")
+            print(
+                f"Unknown mode {mode!r}. "
+                f"Expected {sorted(VALID_MODES)}"
+            )
             return
 
         try:
@@ -102,7 +95,7 @@ class LoadCleanMagics(Magics):
             ) = parse_import(import_line)
 
         except ValueError as exc:
-            print(f"Invalid import: {exc}")
+            print(exc)
             return
 
         filepath = resolve_module(module)
@@ -110,6 +103,24 @@ class LoadCleanMagics(Magics):
         if filepath is None:
             print(f"Module not found: {module}")
             return
+
+        if mode == "default":
+            imported_names = self._execute_import(
+                normalized_import
+            )
+
+            self.state.loaded_registry.update(
+                imported_names
+            )
+
+            self._rewrite_cell(
+                mode,
+                normalized_import,
+                render_array(imported_names),
+            )
+
+            return
+
 
         slicer = SourceSlicer(
             filepath,
@@ -121,8 +132,11 @@ class LoadCleanMagics(Magics):
         source = slicer.build()
 
         if not source:
-            print(f"No matching definitions found in {module}")
+            print(
+                f"No definitions found in {module}"
+            )
             return
+
 
         self._check_dependencies(slicer)
 
@@ -132,21 +146,97 @@ class LoadCleanMagics(Magics):
 
         output = source
 
-        if mode == "default":
-            output += "\n" + render_array(slicer.exported_names())
+        if mode == "inline":
+            output += "\n"
 
-        self._rewrite_cell(mode, normalized_import, output)
+        output += render_array(
+            slicer.exported_names()
+        )
 
+        self._rewrite_cell(
+            mode,
+            normalized_import,
+            output,
+        )
 
-    def _check_dependencies(self, slicer: SourceSlicer) -> None:
+    def _execute_import(
+            self,
+            import_statement: str,
+    ) -> list[str]:
         """
-        Run static dependency analysis and print warnings.
+        Execute an import in an isolated namespace,
+        then copy imported names into IPython.
 
-        Missing names are warnings only. They do not prevent execution.
+        Args:
+            import_statement:
+                Normalized import statement.
+
+        Returns:
+            Names imported.
+        """
+
+        user_ns = get_ipython().user_ns
+
+        temp_ns = {}
+
+        exec(
+            import_statement,
+            temp_ns,
+        )
+
+        imported = [
+            name
+            for name in temp_ns
+            if not name.startswith("__")
+        ]
+
+        user_ns.update(
+            {
+                name: temp_ns[name]
+                for name in imported
+            }
+        )
+
+        return sorted(imported)
+
+
+    def _execute(
+        self,
+        source: str,
+        filepath: Path,
+    ) -> None:
+        """
+        Execute generated source code.
+
+        Args:
+            source:
+                Generated Python source.
+
+            filepath:
+                Source filename for traceback reporting.
+        """
+        exec(
+            compile(
+                source,
+                str(filepath),
+                "exec",
+            ),
+            get_ipython().user_ns,
+        )
+
+
+    def _check_dependencies(
+        self,
+        slicer: SourceSlicer,
+    ) -> None:
+        """
+        Run dependency analysis on extracted definitions.
+
+        Missing dependencies are reported as warnings.
 
         Args:
             slicer:
-                SourceSlicer containing parsed module AST.
+                SourceSlicer containing parsed source.
         """
         checker = DependencyChecker(
             slicer.tree,
@@ -158,66 +248,49 @@ class LoadCleanMagics(Magics):
         for owner, missing in checker.check():
             print(
                 f"[load_clean] warning: "
-                f"'{owner}' references undefined name '{missing}'"
+                f"'{owner}' references undefined name "
+                f"'{missing}'"
             )
 
 
-    def _execute(self, source: str, filepath: str) -> None:
+    def _update_registry(
+        self,
+        slicer: SourceSlicer,
+    ) -> None:
         """
-        Execute generated source inside the IPython namespace.
-
-        Args:
-            source:
-                Rendered Python source code.
-
-            filepath:
-                Original module path used for traceback display.
-        """
-        exec(
-            compile(source, filepath, "exec"),
-            get_ipython().user_ns,
-        )
-
-
-    def _update_registry(self, slicer: SourceSlicer) -> None:
-        """
-        Register names exported by the current load.
+        Store exported names for future dependency checks.
 
         Args:
             slicer:
-                SourceSlicer containing loaded definitions.
+                Loaded source slicer.
         """
         self.state.loaded_registry.update(
             slicer.exported_names()
         )
 
-
     def _rewrite_cell(
         self,
         mode: str,
         import_line: str,
-        source: str,
+        output: str,
     ) -> None:
         """
-        Replace the executed cell with normalized output.
-
-        This allows rerunning the notebook cell without
-        retyping the normalized import.
+        Replace current cell with normalized output.
 
         Args:
             mode:
-                Current %%load_clean mode.
+                Current load mode.
 
             import_line:
-                Normalized import statement.
+                Normalized import.
 
-            source:
-                Generated source code.
+            output:
+                Generated source.
         """
         rewritten = (
             f"%%load_clean {mode}\n"
             f"{import_line}\n\n"
-            f"{source}"
+            f"{output}"
         )
 
         get_ipython().set_next_input(
@@ -226,16 +299,16 @@ class LoadCleanMagics(Magics):
         )
 
 
-def load_ipython_extension(ipython) -> None:
+def load_ipython_extension(
+    ipython: Any,
+) -> None:
     """
     Register %%load_clean with IPython.
 
-    Called automatically by:
-
-        %load_ext load_clean
-
     Args:
         ipython:
-            Active IPython shell instance.
+            Active IPython shell.
     """
-    ipython.register_magics(LoadCleanMagics)
+    ipython.register_magics(
+        LoadCleanMagics
+    )
