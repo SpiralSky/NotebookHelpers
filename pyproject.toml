@@ -1,6 +1,6 @@
 [build-system]
 requires = [
-    "setuptools>=68",
+    "setuptools>=77",
     "wheel"
 ]
 build-backend = "setuptools.build_meta"
@@ -9,22 +9,26 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "load-clean"
 version = "0.0.1"
-description = "Python package"
+description = "Resolve Python definitions and build clean notebooks"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE.md"]
 requires-python = ">=3.10"
 
-dependencies = [
-    "ipython",
-    "ast-comments",
-    "pytest>=9.1.1",
-]
+dependencies = []
 
 [project.optional-dependencies]
+notebook = ["ipython>=8"]
 tools = [
-    "jupytext>=1.19.5",
-    "nbformat>=5.11.0",
+    "jupytext>=1.16",
+    "nbformat>=5.10",
+    "nbclient>=0.10",
 ]
 
+dev = ["pytest>=8", "build>=1.2", "ipython>=8", "jupytext>=1.16", "nbformat>=5.10", "nbclient>=0.10", "ipykernel>=6"]
+
 [project.scripts]
+load-clean = "load_clean_tools.cli:main"
 load-clean-build = "load_clean_tools.cli:main"
 
 [tool.setuptools.packages.find]
@@ -33,7 +37,4 @@ where = [
 ]
 
 [dependency-groups]
-dev = [
-    "build>=1.5.0",
-    "pytest>=8.0.0",
-]
+dev = ["pytest>=8", "build>=1.2", "ipython>=8", "jupytext>=1.16", "nbformat>=5.10", "nbclient>=0.10", "ipykernel>=6"]

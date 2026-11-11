@@ -1,1 +1,1 @@
-"""Notebook-building tools for load_clean."""
+"""Optional notebook build tools; dependencies load only when needed."""

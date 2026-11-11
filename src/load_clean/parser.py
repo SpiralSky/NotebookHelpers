@@ -1,78 +1,53 @@
 from __future__ import annotations
-
 import ast
-
 from .models import LoadCleanCell
+VALID_MODES = {'default', 'inline', 'skeleton'}
 
-
-VALID_MODES = {"default", "inline", "skeleton"}
-
-
-def parse_line(line: str, cell: str) -> tuple[str, str]:
-    """Parse magic arguments and the cell's import statement."""
-    line = line.strip()
-    mode = "default"
-    import_line = ""
-    if line:
-        parts = line.split(None, 1)
-        if parts[0] in VALID_MODES:
-            mode = parts[0]
-            import_line = parts[1] if len(parts) > 1 else ""
-        else:
-            import_line = line
-    if not import_line and cell.splitlines():
-        import_line = cell.splitlines()[0].strip()
-    return mode, import_line
-
-
-def parse_import(import_line: str) -> tuple[str, dict[str, str], bool, str]:
-    """Parse an import into its module, targets, wildcard flag, and normalized form."""
-    tree = ast.parse(import_line, mode="exec")
-    if len(tree.body) != 1:
-        raise ValueError(f"Unsupported import: {import_line}")
-    node = tree.body[0]
+def parse_import(line):
+    try:
+        nodes = ast.parse(line).body
+    except SyntaxError as exc:
+        raise ValueError('Expected one valid Python import') from exc
+    if len(nodes) != 1:
+        raise ValueError('Expected exactly one import')
+    node = nodes[0]
     if isinstance(node, ast.Import) and len(node.names) == 1:
-        module = node.names[0].name
-        return module, {}, True, f"from {module} import *"
-    if isinstance(node, ast.ImportFrom) and node.module:
-        if any(alias.name == "*" for alias in node.names):
-            return node.module, {}, True, import_line
-        targets = {alias.name: alias.asname or alias.name for alias in node.names}
-        return node.module, targets, False, import_line
-    raise ValueError(f"Unsupported import: {import_line}")
+        return node.names[0].name, {}, False, line
+    if isinstance(node, ast.ImportFrom) and node.module and not node.level:
+        return node.module, {a.name: a.asname or a.name for a in node.names if a.name != '*'}, any(a.name == '*' for a in node.names), line
+    raise ValueError('Only absolute, single-module imports are supported')
 
+def parse_line(line, cell):
+    parts = line.strip().split(None, 1)
+    mode = parts.pop(0) if parts and parts[0] in VALID_MODES else 'default'
+    header = parts[0] if parts else ''
+    return mode, header or next((s.strip() for s in cell.splitlines() if s.strip()), '')
 
-def is_load_clean_cell(source: str) -> bool:
-    """Return whether source begins with a %%load_clean magic line."""
+def is_load_clean_cell(source):
     lines = source.splitlines()
-    return bool(lines and lines[0].strip().startswith("%%load_clean"))
+    return bool(lines and lines[0].strip().split(None, 1)[0:1] == ['%%load_clean'])
 
-
-def parse_load_clean_cell(source: str) -> LoadCleanCell | None:
-    """Parse a %%load_clean cell into the mode, import, and requested names."""
+def parse_load_clean_cell(source):
     if not is_load_clean_cell(source):
         return None
     lines = source.splitlines()
-    parts = lines[0].strip().split(None, 1)
-    mode = parts[1] if len(parts) == 2 else "default"
-    import_line = next((line.strip() for line in lines[1:] if line.strip().startswith(("import ", "from "))), "")
-    if not import_line:
-        raise ValueError("%%load_clean cells require an import statement")
+    header = lines[0].strip()[len('%%load_clean'):].strip()
+    parts = header.split(None, 1)
+    mode = parts.pop(0) if parts and parts[0] in VALID_MODES else 'default'
+    body = '\n'.join(lines[1:])
+    if parts:
+        body = parts[0] + '\n' + body
     try:
-        tree = ast.parse("\n".join(lines[1:]))
+        tree = ast.parse(body)
     except SyntaxError as exc:
-        raise ValueError("Invalid %%load_clean cell") from exc
-    names = _requested_names(tree)
-    if not names:
-        _, targets, import_all, _ = parse_import(import_line)
-        if not import_all:
-            names = list(targets)
+        raise ValueError('Invalid load_clean cell') from exc
+    if not tree.body or not isinstance(tree.body[0], (ast.Import, ast.ImportFrom)):
+        raise ValueError('load_clean requires an import statement')
+    import_line = ast.unparse(tree.body[0])
+    parse_import(import_line)
+    names = []
+    for node in tree.body[1:]:
+        if not isinstance(node, ast.Expr) or not isinstance(node.value, ast.List) or any(not isinstance(x, ast.Name) for x in node.value.elts):
+            raise ValueError('Only an import and optional symbol list are allowed; materialize generated code before editing')
+        names.extend(x.id for x in node.value.elts)
     return LoadCleanCell(mode, import_line, names)
-
-
-def _requested_names(tree: ast.Module) -> list[str]:
-    """Return names from the final top-level list expression, if present."""
-    for node in reversed(tree.body):
-        if isinstance(node, ast.Expr) and isinstance(node.value, ast.List):
-            return [item.id for item in node.value.elts if isinstance(item, ast.Name)]
-    return []

@@ -1,314 +1,114 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from typing import Any
 
-from IPython import get_ipython
-from IPython.core.magic import Magics, cell_magic, magics_class
+from IPython.core.error import UsageError
+from IPython.core.magic import Magics, cell_magic, line_magic, magics_class
 
-from .dependency import DependencyChecker
-from .parser import VALID_MODES, parse_import, parse_line
-from .renderer import render_array
+from .api import resolve_cell
+from .parser import parse_import, parse_load_clean_cell
 from .resolver import resolve_module
-from .slicer import SourceSlicer
 
 
-class LoadCleanState:
-    """
-    Stores session state shared between %%load_clean executions.
-
-    Attributes:
-        loaded_registry:
-            Names successfully loaded by previous cells.
-    """
-
-    def __init__(self) -> None:
-        """Initialize an empty load registry."""
-        self.loaded_registry: set[str] = set()
+def _fingerprint(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 @magics_class
 class LoadCleanMagics(Magics):
-    """
-    Implements the %%load_clean IPython cell magic.
-
-    Modes:
-
-        default:
-            Execute the module import normally.
-
-        inline:
-            Replace import with extracted source.
-
-        skeleton:
-            Replace import with definitions containing empty bodies.
-    """
+    """Load definitions into this shell and inspect their source."""
 
     def __init__(self, shell: Any) -> None:
-        """
-        Initialize magic state.
-
-        Args:
-            shell:
-                Active IPython shell instance.
-        """
         super().__init__(shell)
-        self.state = LoadCleanState()
+        self.sources: dict[str, tuple[Path, str]] = {}
 
+    @staticmethod
+    def _parse(line: str, cell: str = ""):
+        try:
+            parsed = parse_load_clean_cell(f"%%load_clean {line}\n{cell}")
+            if parsed is None:
+                raise ValueError("Expected a %%load_clean cell")
+            return parsed
+        except (ValueError, SyntaxError) as exc:
+            raise UsageError(str(exc)) from exc
+
+    @staticmethod
+    def _source(parsed):
+        try:
+            module, _, _, _ = parse_import(parsed.import_line)
+            path = resolve_module(module)
+            source = resolve_cell(parsed.import_line, parsed.names, parsed.mode)
+            return module, path, source
+        except (ValueError, SyntaxError, ImportError, OSError) as exc:
+            raise UsageError(str(exc)) from exc
 
     @cell_magic
-    def load_clean(
-        self,
-        line: str,
-        cell: str = "",
-    ) -> None:
-        """
-        Load Python definitions from a module.
-
-        Example:
-
-            %%load_clean inline
-            import src.sorters.insertion_sort
-
-        Args:
-            line:
-                Magic arguments.
-
-            cell:
-                Cell contents containing the import statement.
-        """
-        mode, import_line = parse_line(line, cell)
-
-        if mode not in VALID_MODES:
-            print(
-                f"Unknown mode {mode!r}. "
-                f"Expected {sorted(VALID_MODES)}"
-            )
+    def load_clean(self, line: str, cell: str = "") -> None:
+        """Execute the import or selected static definitions in the user namespace."""
+        parsed = self._parse(line, cell)
+        if parsed.mode == "default":
+            # Execute exactly the user's import, with normal Python binding semantics.
+            exec(parsed.import_line, self.shell.user_ns)
+            try:
+                module, _, _, _ = parse_import(parsed.import_line)
+                path = resolve_module(module)
+                self.sources[module] = (path, _fingerprint(path))
+            except (ValueError, SyntaxError, ImportError, OSError):
+                # Normal imports may have no inspectable Python source.
+                pass
             return
+        module, path, source = self._source(parsed)
+        if not source.strip():
+            raise UsageError(f"No definitions found in {module}")
+        exec(compile(source, str(path), "exec"), self.shell.user_ns)
+        self.sources[module] = (path, _fingerprint(path))
 
+    @line_magic
+    def load_clean_preview(self, line: str) -> None:
+        """Print the source that a load_clean request would generate."""
+        parsed = self._parse(line)
+        _, _, source = self._source(parsed)
+        print(source)
+
+    @line_magic
+    def load_clean_status(self, line: str) -> None:
+        """Show recorded source fingerprints and whether files have changed."""
+        if line.strip():
+            raise UsageError("%load_clean_status takes no arguments")
+        if not self.sources:
+            print("No load_clean sources recorded")
+            return
+        for module, (path, fingerprint) in sorted(self.sources.items()):
+            try:
+                current = _fingerprint(path)
+                state = "unchanged" if current == fingerprint else "changed"
+            except OSError:
+                state = "unavailable"
+            print(f"{module}: {state} sha256:{fingerprint} ({path})")
+
+    @line_magic
+    def load_clean_check(self, line: str) -> None:
+        """Validate a load request without executing it."""
+        if not line.strip():
+            self.load_clean_status("")
+            return
+        parsed = self._parse(line)
+        module, path, source = self._source(parsed)
         try:
-            (
-                module,
-                targets,
-                import_all,
-                normalized_import,
-            ) = parse_import(import_line)
+            compile(source, str(path), "exec")
+        except SyntaxError as exc:
+            raise UsageError(str(exc)) from exc
+        print(f"{module}: valid sha256:{_fingerprint(path)}")
 
-        except ValueError as exc:
-            print(exc)
-            return
-
-        filepath = resolve_module(module)
-
-        if filepath is None:
-            print(f"Module not found: {module}")
-            return
-
-        if mode == "default":
-            imported_names = self._execute_import(
-                normalized_import
-            )
-
-            self.state.loaded_registry.update(
-                imported_names
-            )
-
-            self._rewrite_cell(
-                mode,
-                normalized_import,
-                render_array(imported_names),
-            )
-
-            return
+    @line_magic
+    def load_clean_materialize(self, line: str) -> None:
+        """Put generated ordinary Python in a new input cell."""
+        parsed = self._parse(line)
+        _, _, source = self._source(parsed)
+        self.shell.set_next_input(source, replace=False)
 
 
-        slicer = SourceSlicer(
-            filepath,
-            targets,
-            mode=mode,
-            import_all=import_all,
-        )
-
-        source = slicer.build()
-
-        if not source:
-            print(
-                f"No definitions found in {module}"
-            )
-            return
-
-
-        self._check_dependencies(slicer)
-
-        self._execute(source, filepath)
-
-        self._update_registry(slicer)
-
-        output = source
-
-        if mode == "inline":
-            output += "\n"
-
-        output += render_array(
-            slicer.exported_names()
-        )
-
-        self._rewrite_cell(
-            mode,
-            normalized_import,
-            output,
-        )
-
-    def _execute_import(
-            self,
-            import_statement: str,
-    ) -> list[str]:
-        """
-        Execute an import in an isolated namespace,
-        then copy imported names into IPython.
-
-        Args:
-            import_statement:
-                Normalized import statement.
-
-        Returns:
-            Names imported.
-        """
-
-        user_ns = get_ipython().user_ns
-
-        temp_ns = {}
-
-        exec(
-            import_statement,
-            temp_ns,
-        )
-
-        imported = [
-            name
-            for name in temp_ns
-            if not name.startswith("__")
-        ]
-
-        user_ns.update(
-            {
-                name: temp_ns[name]
-                for name in imported
-            }
-        )
-
-        return sorted(imported)
-
-
-    def _execute(
-        self,
-        source: str,
-        filepath: Path,
-    ) -> None:
-        """
-        Execute generated source code.
-
-        Args:
-            source:
-                Generated Python source.
-
-            filepath:
-                Source filename for traceback reporting.
-        """
-        exec(
-            compile(
-                source,
-                str(filepath),
-                "exec",
-            ),
-            get_ipython().user_ns,
-        )
-
-
-    def _check_dependencies(
-        self,
-        slicer: SourceSlicer,
-    ) -> None:
-        """
-        Run dependency analysis on extracted definitions.
-
-        Missing dependencies are reported as warnings.
-
-        Args:
-            slicer:
-                SourceSlicer containing parsed source.
-        """
-        checker = DependencyChecker(
-            slicer.tree,
-            slicer.selected_nodes(),
-            get_ipython().user_ns,
-            self.state.loaded_registry,
-        )
-
-        for owner, missing in checker.check():
-            print(
-                f"[load_clean] warning: "
-                f"'{owner}' references undefined name "
-                f"'{missing}'"
-            )
-
-
-    def _update_registry(
-        self,
-        slicer: SourceSlicer,
-    ) -> None:
-        """
-        Store exported names for future dependency checks.
-
-        Args:
-            slicer:
-                Loaded source slicer.
-        """
-        self.state.loaded_registry.update(
-            slicer.exported_names()
-        )
-
-    def _rewrite_cell(
-        self,
-        mode: str,
-        import_line: str,
-        output: str,
-    ) -> None:
-        """
-        Replace current cell with normalized output.
-
-        Args:
-            mode:
-                Current load mode.
-
-            import_line:
-                Normalized import.
-
-            output:
-                Generated source.
-        """
-        rewritten = (
-            f"%%load_clean {mode}\n"
-            f"{import_line}\n\n"
-            f"{output}"
-        )
-
-        get_ipython().set_next_input(
-            rewritten,
-            replace=True,
-        )
-
-
-def load_ipython_extension(
-    ipython: Any,
-) -> None:
-    """
-    Register %%load_clean with IPython.
-
-    Args:
-        ipython:
-            Active IPython shell.
-    """
-    ipython.register_magics(
-        LoadCleanMagics
-    )
+def load_ipython_extension(ipython: Any) -> None:
+    ipython.register_magics(LoadCleanMagics)

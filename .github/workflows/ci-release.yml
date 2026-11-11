@@ -2,61 +2,76 @@ name: CI and release
 
 on:
   push:
-    branches:
-      - main
-    tags:
-      - "v*"
+    branches: [main]
+    tags: ['v*']
   pull_request:
 
 permissions:
   contents: read
 
 jobs:
-  test-and-build:
-    name: Test and build
+  test:
     runs-on: ubuntu-latest
-
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.11', '3.12', '3.13', '3.14']
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: python -m pip install --upgrade pip && python -m pip install '.[tools]' pytest build
-
-      - name: Run tests
+          python-version: ${{ matrix.python }}
+      - name: Install development dependencies
+        run: python -m pip install '.[dev]'
+      - name: Test
         run: python -m pytest
 
-      - name: Build distribution packages
-        run: python -m build
-
-      - name: Upload distribution packages
-        uses: actions/upload-artifact@v4
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - run: python -m pip install build
+      - name: Verify release tag matches package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          python - <<'PY'
+          import os, pathlib, tomllib
+          version = tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version']
+          tag = os.environ['GITHUB_REF_NAME']
+          if tag != f'v{version}':
+              raise SystemExit(f'Tag {tag!r} must equal v{version}')
+          PY
+      - run: python -m build
+      - name: Smoke test installed wheel outside source tree
+        run: |
+          python -m venv /tmp/load-clean-wheel
+          /tmp/load-clean-wheel/bin/python -m pip install dist/*.whl
+          cd /tmp
+          /tmp/load-clean-wheel/bin/python -c 'import load_clean; from load_clean.api import resolve_cell; import importlib.util; assert importlib.util.find_spec("IPython") is None'
+          /tmp/load-clean-wheel/bin/load-clean --help
+          /tmp/load-clean-wheel/bin/load-clean-build --help
+      - uses: actions/upload-artifact@v4
         with:
           name: distribution-packages
           path: dist/
           if-no-files-found: error
 
   release:
-    name: Create GitHub release
-    needs: test-and-build
+    needs: [test, build]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
-      - name: Download distribution packages
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: distribution-packages
           path: dist
-
-      - name: Create release and attach packages
+      - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes
+          GH_REPO: ${{ github.repository }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GH_REPO" --verify-tag --generate-notes
