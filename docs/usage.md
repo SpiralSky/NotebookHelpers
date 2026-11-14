@@ -93,7 +93,9 @@ provides the source path. Saving neither installs nor imports anything.
 ## Static resolution
 
 Embedding reads local Python source and follows supported static dependencies.
-Source lookup scans `sys.path` without importing parent packages. Resolution is
+Source lookup scans `sys.path` without importing parent packages. API callers
+may pass `source_roots=[Path("src")]` to `resolve_cell` for exclusive, ordered
+filesystem lookup. Resolution is
 scope-aware, but Python's dynamic behavior cannot generally be determined from
 source alone. Unsupported dependencies and constructs produce explicit errors;
 resolve them before sharing an export.
@@ -128,7 +130,8 @@ The API uses the same new-file, validation, and filesystem policy as the magic.
 
 ## Pair and synchronize saved notebooks
 
-Install `load-clean[tools]`, then select one existing file explicitly:
+From a source checkout, install `python -m pip install -e '.[tools]'`, then
+select one existing file explicitly:
 
 ```sh
 load-clean pair --source "notebooks/dev_trial.ipynb"
@@ -160,7 +163,8 @@ remove its counterpart, and pair the retained file. No directory-wide sync exist
 
 ## Build and inspect notebooks
 
-Install the `tools` extra before using notebook commands.
+From a source checkout, install `python -m pip install -e '.[tools]'` before
+using notebook commands. Add `ipykernel` for execution in this environment.
 
 ```sh
 load-clean build --source notebooks --output build --prefix dev_
@@ -185,3 +189,33 @@ Execution is opt-in and uses nbclient. It runs notebook code with the privileges
 of the current process; use trusted inputs and a suitable kernel environment.
 Execution cannot be combined with check mode. A successful static check alone
 does not establish that a notebook executes successfully.
+
+Both check spellings keep proposed paths on stdout; their success message on
+stderr explicitly says no code executed and no output was written. Build keeps
+written paths on stdout and identifies source and destination on stderr. Static
+check success does not test runtime imports, assertions, or other cell behavior.
+
+For helpers that are not installed, select source roots explicitly:
+
+```sh
+cd examples
+load-clean check --source dev_example.ipynb --source-root . --output ../build
+load-clean build --source dev_example.ipynb --source-root . --output ../build --execute
+```
+
+`--source-root` is repeatable. Roots are relative to the terminal's working
+directory, must be existing directories, and replace `sys.path` lookup for static
+embedding; the first matching source wins. Specify only intended project roots
+in the desired order. No notebook-directory root is added implicitly and no
+helper or parent initializer is imported. This avoids depending on executable
+versus `python -m` path differences or accidentally adding local shadow modules.
+Without the option, existing `sys.path` lookup remains. This setting never edits
+`sys.path`, installs packages, or changes fresh-kernel runtime imports. Install
+the helper project separately when retaining ordinary imports in an export.
+
+Inline loads read current on-disk definitions into a snapshot. Edit/save the
+module, rerun the inline cell, then rerun dependent calculations. Ordinary
+imports use Python's normal module cache; reload the module explicitly or use
+IPython autoreload and rerun consumers. `%load_clean_status` detects file changes
+against recorded fingerprints but cannot certify that downstream results are
+fresh, even when it reports unchanged. Nothing automatically reruns cells.

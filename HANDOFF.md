@@ -1,6 +1,6 @@
 # Implementation handoff
 
-Updated: 2026-11-14. P2 baseline: `d672aad` on `main`.
+Updated: 2026-11-14. P3 baseline: `426802d` on `main`.
 
 ## Current state and next-session request
 
@@ -22,8 +22,24 @@ retain path-only stdout and never synchronize. Docs explain saved/unsaved edits,
 recency versus merging, reconciliation, and selecting one input deliberately.
 Verification: 61 tests passed without skips; disposable pair/sync/check/build CLI
 walkthrough passed with spaces in paths; isolated sdist/wheel build passed.
-Local kernel/trust-database and build-network access used normal escalation. P3 and final installed-wheel integration remain to do.
-Continue with P3 below; its acceptance conditions remain unchanged.
+P3 and final integration are complete in the commit containing this update.
+Check/build retain path-only stdout, with static/no-write and source/destination
+feedback on stderr. Explicit repeatable `--source-root` replaces static lookup
+roots without mutating sys.path or importing helpers. Errors retain original
+source cell numbers after removal and give recovery guidance. Doctor uses
+source-checkout installation advice. Reload, snapshots, and status limits are
+documented and tested.
+Verification: focused suite 50 passed; full suite 66 passed, no skips. Isolated
+sdist/wheel build passed. Clean core-only wheel verified both executables and
+missing optional dependencies; separate wheel+dev environment reproduced the
+example lookup failure, then verified explicit roots and both entry points.
+A disposable complete preview/save/import/test/edit/reload/inline/pair/sync/Git/
+check/executed-build workflow passed outside the repository. Preview/check made
+no output; build/check preserved original helper and selected sources; fresh
+kernel output was 400 and the export had no writer or development magic.
+Kernel sockets/trust database and build/install network used normal escalation.
+No implementation blockers remain. Human predictions remain untested. The
+coordinator will arrange the independent review; do not start another review.
 
 The user requests a handoff for implementing **all remaining work** from the UX
 review in the next session. This document covers P1–P3 and final verification.
@@ -125,6 +141,8 @@ Acceptance:
    containing spaces. Keep ordinary helper `.py` files out of broad sync actions.
 
 ## P3: feedback, source discovery, and current results
+
+Completed; original acceptance contract follows.
 
 Relevant files: `cli.py`, `notebook_builder.py`, `src/load_clean/extension.py`,
 `src/load_clean/resolver.py`, corresponding tests, README and usage/workflow docs.

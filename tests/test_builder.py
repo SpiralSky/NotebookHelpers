@@ -204,3 +204,57 @@ def test_saved_module_export_journey(tmp_path, monkeypatch):
     assert all(cell.execution_count is not None for cell in executed.cells)
     assert source.read_bytes() == original
     assert module.read_bytes() == before
+
+
+@pytest.mark.skipif(nbformat is None, reason="nbformat not installed")
+def test_cli_feedback_explicit_roots_and_static_only(tmp_path, capsys):
+    from load_clean_tools.cli import main
+
+    helpers = tmp_path / "helpers"
+    helpers.mkdir()
+    (helpers / "uninstalled_p3.py").write_text('raise RuntimeError("must not import")\ndef value(): return 8\n')
+    source = tmp_path / "dev_static.ipynb"
+    nbformat.write(nbformat.v4.new_notebook(cells=[
+        nbformat.v4.new_code_cell('%%load_clean inline\nfrom uninstalled_p3 import value'),
+        nbformat.v4.new_code_cell('raise RuntimeError("must not execute check")'),
+    ]), source)
+    original = source.read_bytes()
+    output = tmp_path / "out"
+    arguments = ["--source", str(source), "--output", str(output), "--source-root", str(helpers)]
+    before = list(sys.path)
+    assert main(["check", *arguments]) == 0
+    captured = capsys.readouterr()
+    target = output / "static.ipynb"
+    assert captured.out == f"{target}\n"
+    assert "no output written" in captured.err and "no code executed" in captured.err
+    assert not output.exists() and source.read_bytes() == original
+    assert "uninstalled_p3" not in sys.modules and sys.path == before
+    assert main(["build", *arguments]) == 0
+    captured = capsys.readouterr()
+    assert captured.out == f"{target}\n"
+    assert str(source) in captured.err and str(target) in captured.err
+    assert source.read_bytes() == original
+
+
+@pytest.mark.skipif(nbformat is None, reason="nbformat not installed")
+def test_cli_source_cell_and_recovery(tmp_path, capsys):
+    from load_clean_tools.cli import main
+
+    source = tmp_path / "dev_bad.ipynb"
+    nbformat.write(nbformat.v4.new_notebook(cells=[
+        nbformat.v4.new_code_cell('ignored', metadata={'tags': ['load-clean-remove']}),
+        nbformat.v4.new_code_cell('%%load_clean inline\nimport impossible_helper'),
+    ]), source)
+    assert main(["check", "--source", str(source)]) == 1
+    error = capsys.readouterr().err
+    assert str(source) in error and "Cell 2" in error
+    assert "from module import symbol" in error and "ordinary import" in error
+
+
+def test_doctor_checkout_guidance(monkeypatch, capsys):
+    from load_clean_tools import cli
+
+    monkeypatch.setattr(cli.importlib.util, "find_spec", lambda name: None)
+    assert cli.main(["doctor"]) == 0
+    output = capsys.readouterr().out
+    assert "source checkout" in output and "python -m pip install -e" in output

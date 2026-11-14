@@ -16,12 +16,13 @@ From a source checkout, in the environment used by your notebook kernel:
 ```sh
 python -m pip install -e '.[notebook,tools]' ipykernel
 cd examples
-python -m load_clean_tools.cli build --source dev_example.ipynb --output ../build --execute
+load-clean build --source dev_example.ipynb --source-root . --output ../build --execute
 ```
 
 This writes `build/example.ipynb` at the repository root and runs its assertion
-and greeting in a fresh kernel. Run from `examples` so the helper module can be
-found. Omit `--execute` to build without executing code. The original notebook
+and greeting in a fresh kernel. `--source-root .` explicitly selects `examples`
+for static helper lookup. Omit `--execute` to build without executing code.
+The original notebook
 is preserved; an existing generated output is replaced.
 
 Follow [the notebook-to-files workflow](docs/workflow.md) for interactive setup,

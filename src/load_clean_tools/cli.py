@@ -5,13 +5,14 @@ import importlib.util
 import sys
 from pathlib import Path
 
-from .notebook_builder import build, build_default
+from .notebook_builder import build, build_default, _target
 
 
 def _options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--source", default="notebooks", help="Notebook file or source directory")
     parser.add_argument("--output", default="build", help="Output directory")
     parser.add_argument("--prefix", default="dev_", help="Source filename prefix")
+    parser.add_argument("--source-root", action="append", help="Explicit embedding source directory; repeat for ordered roots (replaces sys.path lookup)")
     parser.add_argument("--execute", action="store_true", help="Execute cleaned notebooks using nbclient")
 
 
@@ -48,7 +49,7 @@ def main(argv: list[str] | None = None) -> int:
             if not available:
                 missing.append(name)
         if missing:
-            print("Install notebook tools with pip install 'load-clean[tools]'; install nbclient and an IPython kernel for --execute.")
+            print("From a source checkout, run python -m pip install -e '.[notebook,tools]' ipykernel in this environment. No published distribution is assumed.")
         return 0
     try:
         if args.command in {"pair", "sync"}:
@@ -59,12 +60,20 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         source = Path(args.source)
         if not source.exists():
-            raise FileNotFoundError(f"Source does not exist: {source}")
+            raise FileNotFoundError(f"Source does not exist: {source}; select an existing saved file or directory with --source")
         check = args.command == "check" or getattr(args, "check", False)
-        kwargs = dict(output=args.output, prefix=args.prefix, execute=args.execute, check=check)
+        kwargs = dict(output=args.output, prefix=args.prefix, execute=args.execute, check=check, source_roots=args.source_root)
         paths = [build(source, **kwargs)] if source.is_file() else build_default(source_dir=source, **kwargs)
         for path in paths:
             print(path)
+        if check:
+            print(f"Checked {source}: static validation only; no code executed; no output written.", file=sys.stderr)
+        else:
+            sources = [source] if source.is_file() else sorted(
+                path for suffix in (".py", ".ipynb") for path in source.glob(f"{args.prefix}*{suffix}")
+            )
+            for selected in sources:
+                print(f"Built from {selected} -> {_target(selected, args.output, args.prefix)}", file=sys.stderr)
     except (OSError, ValueError, RuntimeError) as exc:
         print(f"load-clean: {exc}", file=sys.stderr)
         return 1

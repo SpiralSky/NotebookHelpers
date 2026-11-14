@@ -115,6 +115,9 @@ class LoadCleanMagics(Magics):
                 state = "unavailable"
             print(f"{module}: {state} sha256:{fingerprint} ({path})")
 
+        print("Status compares on-disk source with the last load; it cannot certify downstream results are fresh. "
+              "Reload ordinary modules or rerun inline cells, then rerun dependent cells.")
+
     @line_magic
     def load_clean_check(self, line: str) -> None:
         """Validate a load request without executing it."""
@@ -127,7 +130,7 @@ class LoadCleanMagics(Magics):
             compile(source, str(path), "exec")
         except SyntaxError as exc:
             raise UsageError(str(exc)) from exc
-        print(f"{module}: valid sha256:{_fingerprint(path)}")
+        print(f"{module}: valid sha256:{_fingerprint(path)}; static check only, no code executed or output written")
 
     @line_magic
     def load_clean_materialize(self, line: str) -> None:

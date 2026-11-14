@@ -25,7 +25,7 @@ use for the notebook kernel:
 ```sh
 python -m pip install -e '.[notebook,tools]' ipykernel
 cd examples
-python -m load_clean_tools.cli pair --source dev_example.ipynb
+load-clean pair --source dev_example.ipynb
 ```
 
 This creates `dev_example.py` beside the notebook and records the pairing.
@@ -46,9 +46,9 @@ in the package extras.
 Save and close the notebook before synchronizing from a terminal. From `examples`:
 
 ```sh
-python -m load_clean_tools.cli sync --source dev_example.ipynb
-python -m load_clean_tools.cli check --source dev_example.py --output ../build
-python -m load_clean_tools.cli build --source dev_example.py --output ../build --execute
+load-clean sync --source dev_example.ipynb
+load-clean check --source dev_example.py --source-root . --output ../build
+load-clean build --source dev_example.py --source-root . --output ../build --execute
 ```
 
 The check prints the proposed output path but writes nothing. Build produces
@@ -56,9 +56,10 @@ The check prints the proposed output path but writes nothing. Build produces
 and retains the new outputs. Without `--execute`, build clears outputs and does
 not execute cells. The original notebook is preserved; an existing build target
 is replaced. The export contains `greet` as ordinary Python and no load-clean
-cell magic. The `python -m` invocation makes the current directory available for resolving
-this uninstalled helper module; the installed `load-clean` entry point does not
-necessarily include it. For an installed helper package, either invocation works.
+cell magic. The explicit `--source-root .` selects the directory containing the uninstalled
+example helper for static lookup with either CLI entry point. It does not change
+the execution kernel's import path; ordinary imports still require their packages
+to be available in that kernel.
 Always select one file explicitly when a directory contains both
 paired representations: directory builds reject that ambiguity and print both
 valid explicit file commands. They never synchronize or select a side for you.
@@ -81,6 +82,17 @@ assert example_helpers.greet("world") == "Hello, world!"
 ```
 
 Edit and save `example_helpers.py`, then rerun the calling cell to try the change.
+Without autoreload, use ordinary Python explicitly:
+
+```python
+import importlib
+importlib.invalidate_caches()
+importlib.reload(example_helpers)
+assert example_helpers.greet("world") == "Hello, world!"
+```
+
+Plain imports retain Python's module cache. Prefer module-qualified calls after
+reload; old `from module import function` bindings may need importing again.
 [Autoreload](https://ipython.readthedocs.io/en/stable/config/extensions/autoreload.html)
 refreshes imports before cell execution, but has limitations around changed class
 structure and extension modules. Restart and run all cells before accepting a
@@ -181,3 +193,28 @@ library, evaluate [nbdev](https://nbdev.fast.ai/tutorials/tutorial.html), which
 exports designated cells to modules and integrates tests and documentation.
 That is a different authoring model from promoting experiments into ordinary
 modules; load-clean does not currently offer that package workflow.
+
+## Complete a promoted prototype
+
+Preview/save `scratch_helpers.py` above, replace the writer with an ordinary
+import, and run its behavior test. Edit the module, explicitly reload it (or use
+autoreload), and rerun the test and dependent calculations. For a standalone
+export, use an inline selection and rerun it after the edit. Save/close the
+notebook, pair once, then sync the saved pair. Review helper and notebook text
+with Git before exporting the deliberately selected input:
+
+```sh
+load-clean pair --source dev_trial.ipynb  # once, before its counterpart exists
+load-clean sync --source dev_trial.ipynb
+git diff -- dev_trial.py scratch_helpers.py
+git status --short
+load-clean check --source dev_trial.py --source-root . --output build
+load-clean build --source dev_trial.py --source-root . --output build --execute
+```
+
+Tag writer/setup/autoreload cells `load-clean-remove`. The generated notebook
+contains ordinary source, requires no development magics, and cannot recreate
+its helper through the removed writer. Check performs static validation only;
+`--execute` runs the cleaned notebook in a fresh kernel. Neither operation
+rewrites the helper or selected source. Status compares files to recorded loads;
+it cannot certify downstream freshness. Recompute dependent cells explicitly.

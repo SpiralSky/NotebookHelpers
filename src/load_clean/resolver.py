@@ -5,15 +5,15 @@ from pathlib import Path
 from .parser import VALID_MODES, parse_import
 
 
-def resolve_module(module: str) -> Path:
+def resolve_module(module: str, source_roots: list[str | Path] | None = None) -> Path:
     # Project paths avoid executing package initializers during builds.
     import sys
-    for root in sys.path:
+    for root in (sys.path if source_roots is None else source_roots):
         base = Path(root or '.') / module.replace('.', '/')
         for candidate in (base.with_suffix('.py'), base / '__init__.py'):
             if candidate.is_file():
                 return candidate.resolve()
-    raise ValueError(f'No Python source found for {module!r}; configure the project source path')
+    raise ValueError(f'No Python source found for {module!r}; install the helper project into this environment or pass --source-root PATH to check/build')
 
 
 def _bindings(node):
@@ -41,7 +41,7 @@ def _globals(source):
 
 
 class LoadCleanResolver:
-    def resolve(self, import_line, names, mode='default'):
+    def resolve(self, import_line, names, mode='default', *, source_roots: list[str | Path] | None = None):
         if mode not in VALID_MODES:
             raise ValueError(f'Unknown mode {mode!r}')
         module, targets, wildcard, _ = parse_import(import_line)
@@ -49,7 +49,7 @@ class LoadCleanResolver:
             return import_line
         if isinstance(ast.parse(import_line).body[0], ast.Import):
             raise ValueError('Embedding requires from module import symbol syntax')
-        path = resolve_module(module)
+        path = resolve_module(module, source_roots)
         source = path.read_text(encoding='utf-8')
         tree = ast.parse(source)
         index = {}

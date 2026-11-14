@@ -16,7 +16,7 @@ def _dependency(name: str, extra: str = "tools") -> Any:
     try:
         return __import__(name)
     except ImportError as exc:
-        raise RuntimeError(f"{name} is required; install load-clean[{extra}]") from exc
+        raise RuntimeError(f"{name} is required; install load-clean[{extra}] from a source checkout with python -m pip install -e '.[{extra}]'") from exc
 
 
 def is_autoremove_cell(source: str) -> bool:
@@ -30,9 +30,9 @@ def is_autoremove_cell(source: str) -> bool:
     return False
 
 
-def resolve_cells(notebook: Any) -> Any:
+def resolve_cells(notebook: Any, *, source_roots: list[str | Path] | None = None, cell_numbers: list[int] | None = None) -> Any:
     """Replace code cells containing load-clean magic with resolved source."""
-    for index, cell in enumerate(notebook.cells, 1):
+    for index, cell in zip(cell_numbers or range(1, len(notebook.cells) + 1), notebook.cells):
         if cell.cell_type != "code":
             continue
         try:
@@ -41,19 +41,20 @@ def resolve_cells(notebook: Any) -> Any:
                 raise ValueError("Remove the save cell or tag it load-clean-remove before export")
             parsed = parse_load_clean_cell(cell.source)
             if parsed:
-                cell.source = resolve_cell(parsed.import_line, parsed.names, parsed.mode)
+                cell.source = resolve_cell(parsed.import_line, parsed.names, parsed.mode, source_roots=source_roots)
         except Exception as exc:
-            raise ValueError(f"Cell {index}: {exc}") from exc
+            raise ValueError(f"Cell {index}: {exc}. For unsupported embedding, keep an ordinary import in default mode and install the helper in the runtime environment.") from exc
     return notebook
 
 
-def clean_notebook(notebook: Any) -> Any:
+def clean_notebook(notebook: Any, *, source_roots: list[str | Path] | None = None) -> Any:
     """Remove marked cells, resolve magic, and clear execution state."""
-    notebook.cells = [cell for cell in notebook.cells if not (
+    retained = [(index, cell) for index, cell in enumerate(notebook.cells, 1) if not (
         "load-clean-remove" in cell.get("metadata", {}).get("tags", [])
         or (cell.cell_type == "code" and is_autoremove_cell(cell.source))
     )]
-    resolve_cells(notebook)
+    notebook.cells = [cell for _, cell in retained]
+    resolve_cells(notebook, source_roots=source_roots, cell_numbers=[index for index, _ in retained])
     for cell in notebook.cells:
         if cell.cell_type == "code":
             cell.outputs = []
@@ -67,7 +68,7 @@ def load_source_notebook(path: Path) -> Any:
         return _dependency("nbformat").read(path, as_version=4)
     if path.suffix == ".py":
         return _dependency("jupytext").read(path, fmt="py:percent")
-    raise ValueError(f"Unsupported notebook source: {path}")
+    raise ValueError(f"Unsupported notebook source: {path}; select .ipynb or py:percent")
 
 
 def find_notebook(source: Path) -> Path:
@@ -104,15 +105,22 @@ def _execute(notebook: Any, source: Path) -> None:
     NotebookClient(notebook, resources={"metadata": {"path": str(source.parent.resolve())}}).execute()
 
 
-def build(source: str | Path, *, output: str | Path = "build", prefix: str = "dev_", execute: bool = False, check: bool = False) -> Path:
+def build(source: str | Path, *, output: str | Path = "build", prefix: str = "dev_", execute: bool = False, check: bool = False, source_roots: list[str | Path] | None = None) -> Path:
     """Materialize one cleaned notebook, optionally executing or checking it."""
     if check and execute:
         raise ValueError("--execute cannot be combined with check")
     source_path = Path(source)
+    if not source_path.is_file():
+        raise ValueError(f"Source does not exist or is not a file: {source_path}; select an existing saved .ipynb or py:percent file")
+    if source_roots is not None:
+        source_roots = [Path(root).resolve() for root in source_roots]
+        for root in source_roots:
+            if not root.is_dir():
+                raise ValueError(f"Source root is not a directory: {root}; select the directory containing your helper modules")
     _validate_paths([source_path], output, prefix)
     try:
-        notebook = clean_notebook(load_source_notebook(source_path))
-    except ValueError as exc:
+        notebook = clean_notebook(load_source_notebook(source_path), source_roots=source_roots)
+    except (ValueError, RuntimeError, OSError, SyntaxError) as exc:
         raise ValueError(f"{source_path}: {exc}") from exc
     if execute:
         _execute(notebook, source_path)
@@ -133,7 +141,7 @@ def build(source: str | Path, *, output: str | Path = "build", prefix: str = "de
     return target
 
 
-def build_default(*, source_dir: str | Path = "notebooks", output: str | Path = "build", prefix: str = "dev_", execute: bool = False, check: bool = False) -> list[Path]:
+def build_default(*, source_dir: str | Path = "notebooks", output: str | Path = "build", prefix: str = "dev_", execute: bool = False, check: bool = False, source_roots: list[str | Path] | None = None) -> list[Path]:
     """Build prefixed notebooks, rejecting ambiguous pairs and collisions."""
     if check and execute:
         raise ValueError("--execute cannot be combined with check")
@@ -142,4 +150,4 @@ def build_default(*, source_dir: str | Path = "notebooks", output: str | Path = 
     if not sources:
         raise ValueError(f"No notebooks matching {prefix}*.py or {prefix}*.ipynb in {directory}")
     _validate_paths(sources, output, prefix)
-    return [build(source, output=output, prefix=prefix, execute=execute, check=check) for source in sources]
+    return [build(source, output=output, prefix=prefix, execute=execute, check=check, source_roots=source_roots) for source in sources]

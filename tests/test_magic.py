@@ -82,3 +82,24 @@ def test_save_preview_and_create_preserve_shell(shell, tmp_path, monkeypatch, ca
 def test_save_errors_are_usage_errors(shell, line, source):
     with pytest.raises(UsageError):
         shell.run_cell_magic('load_clean_save', line, source)
+
+
+def test_edit_reload_and_inline_rerun(shell, tmp_path, capsys):
+    import importlib
+
+    shell.run_cell_magic('load_clean', '', 'import magic_example as ordinary')
+    shell.run_cell_magic('load_clean', 'inline', 'from magic_example import answer')
+    ordinary = shell.user_ns['ordinary']
+    old_answer = shell.user_ns['answer']
+    old_result = old_answer()
+    (tmp_path / 'magic_example.py').write_text('VALUE = 12345\ndef answer():\n    return VALUE\n')
+    shell.run_cell_magic('load_clean', '', 'import magic_example as ordinary')
+    assert ordinary.answer() == 3 and old_answer() == 3
+    importlib.invalidate_caches()
+    importlib.reload(ordinary)
+    assert ordinary.answer() == 12345 and old_answer() == 3
+    shell.run_line_magic('load_clean_status', '')
+    assert 'cannot certify downstream results' in capsys.readouterr().out
+    shell.run_cell_magic('load_clean', 'inline', 'from magic_example import answer')
+    assert shell.user_ns['answer']() == 12345
+    assert old_result == 3

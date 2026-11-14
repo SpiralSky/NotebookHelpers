@@ -64,3 +64,20 @@ def test_nested_scope_does_not_hide_global(tmp_path, monkeypatch):
     ns = {}
     exec(resolve_cell('from scope_example import f', [], 'inline'), ns)
     assert ns['f']() == 9
+
+
+def test_explicit_source_roots_are_exclusive_and_static(tmp_path, monkeypatch):
+    root = tmp_path / 'explicit'
+    root.mkdir()
+    elsewhere = tmp_path / 'elsewhere'
+    elsewhere.mkdir()
+    (root / 'selection.py').write_text('raise RuntimeError("must not import")\ndef f(): return 9')
+    (elsewhere / 'selection.py').write_text('def f(): return 1')
+    (elsewhere / 'only_elsewhere.py').write_text('def f(): return 2')
+    monkeypatch.syspath_prepend(str(elsewhere))
+    before = list(sys.path)
+    source = resolve_cell('from selection import f', [], 'inline', source_roots=[root])
+    assert 'return 9' in source
+    with pytest.raises(ValueError, match='--source-root'):
+        resolve_cell('from only_elsewhere import f', [], 'inline', source_roots=[root])
+    assert sys.path == before and 'selection' not in sys.modules
