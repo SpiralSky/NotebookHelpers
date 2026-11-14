@@ -1,10 +1,10 @@
 # Implementation handoff
 
-Updated: 2026-11-14. Baseline: `0edf184` on `main`.
+Updated: 2026-11-14. P2 baseline: `d672aad` on `main`.
 
 ## Current state and next-session request
 
-P1 is complete in the commit containing this update: `%%load_clean_save`
+P1 is complete in `d672aad`: `%%load_clean_save`
 previews or atomically creates a new whole-cell module without execution;
 existing paths are refused and replacement is unsupported. Parents must exist,
 symlinks are refused, and exports reject untagged save cells. Core save API,
@@ -12,7 +12,18 @@ file/race safety tests, magic tests, export workflow tests, and guidance are add
 Verification: 49 tests passed without skips (including fresh-kernel promotion
 export); isolated sdist/wheel build passed. Initial socket/network sandbox
 failures were resolved through normal escalation. No human predictions tested.
-Continue with P2, then P3 below; their acceptance conditions remain unchanged.
+P2 is complete in the commit containing this update. `pair --source FILE` creates
+an ipynb/percent pair and refuses an existing counterpart; `sync --source FILE`
+requires recorded same-directory pairing and uses Jupytext's recency rules.
+Both report exact created/updated/unchanged file paths by content bytes. Ordinary
+helper modules/directories and unsupported formats are refused. Directory build
+ambiguity names both inputs and shell-quoted explicit build choices. Build/check
+retain path-only stdout and never synchronize. Docs explain saved/unsaved edits,
+recency versus merging, reconciliation, and selecting one input deliberately.
+Verification: 61 tests passed without skips; disposable pair/sync/check/build CLI
+walkthrough passed with spaces in paths; isolated sdist/wheel build passed.
+Local kernel/trust-database and build-network access used normal escalation. P3 and final installed-wheel integration remain to do.
+Continue with P3 below; its acceptance conditions remain unchanged.
 
 The user requests a handoff for implementing **all remaining work** from the UX
 review in the next session. This document covers P1–P3 and final verification.
@@ -85,12 +96,12 @@ editing, and replacing nbdev. Missing globals remain the author's responsibility
 
 ## P2: make pairing/synchronization and build selection discoverable
 
-Relevant files: `src/load_clean_tools/sync.py`, `cli.py`,
+Completed. Original contract retained below. Relevant files: `src/load_clean_tools/sync.py`, `cli.py`,
 `notebook_builder.py`, `tests/test_builder.py`, and the workflow/reference docs.
 Add focused sync tests if a separate file is clearer.
 
-The current `sync()` scans every top-level `.py` file and calls Jupytext. It is
-not exposed through the CLI and is not a safe template for blindly processing
+The pre-P2 `sync()` scanned every top-level `.py` file and called Jupytext. It was
+not exposed through the CLI and was not a safe template for blindly processing
 ordinary helper modules. Reuse Jupytext rather than building a merge engine.
 Consult the installed API or official documentation for the actual version used.
 

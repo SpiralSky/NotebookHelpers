@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import os
+import shlex
 from pathlib import Path
 import tempfile
 import tokenize
@@ -86,7 +87,12 @@ def _validate_paths(sources: list[Path], output: str | Path, prefix: str) -> Non
         if target in inputs:
             raise ValueError(f"Output would overwrite an input notebook: {target}")
         if target in targets:
-            raise ValueError(f"Output collision: {targets[target]} and {source} both map to {target}")
+            previous = targets[target]
+            detail = ""
+            if previous.with_suffix("") == source.with_suffix("") and {previous.suffix, source.suffix} == {".py", ".ipynb"}:
+                choices = [shlex.join(["load-clean", "build", "--source", str(path), "--output", str(output), "--prefix", prefix]) for path in (previous, source)]
+                detail = f"; paired source ambiguity. Select the intended saved input explicitly: {choices[0]} OR {choices[1]}. Build does not synchronize; reconcile copies or deliberately sync first."
+            raise ValueError(f"Output collision: {previous} and {source} both map to {target}{detail}")
         targets[target] = source
 
 

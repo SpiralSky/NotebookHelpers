@@ -25,7 +25,7 @@ use for the notebook kernel:
 ```sh
 python -m pip install -e '.[notebook,tools]' ipykernel
 cd examples
-python -m jupytext --set-formats ipynb,py:percent dev_example.ipynb
+python -m load_clean_tools.cli pair --source dev_example.ipynb
 ```
 
 This creates `dev_example.py` beside the notebook and records the pairing.
@@ -46,7 +46,7 @@ in the package extras.
 Save and close the notebook before synchronizing from a terminal. From `examples`:
 
 ```sh
-python -m jupytext --sync dev_example.ipynb
+python -m load_clean_tools.cli sync --source dev_example.ipynb
 python -m load_clean_tools.cli check --source dev_example.py --output ../build
 python -m load_clean_tools.cli build --source dev_example.py --output ../build --execute
 ```
@@ -60,7 +60,8 @@ cell magic. The `python -m` invocation makes the current directory available for
 this uninstalled helper module; the installed `load-clean` entry point does not
 necessarily include it. For an installed helper package, either invocation works.
 Always select one file explicitly when a directory contains both
-paired representations: directory builds currently reject that ambiguity.
+paired representations: directory builds reject that ambiguity and print both
+valid explicit file commands. They never synchronize or select a side for you.
 
 ## Iterate on reusable code
 
@@ -159,11 +160,21 @@ checking whether their outputs are part of the deliverable.
 
 [Jupytext pairing](https://jupytext.org/using/paired-notebooks/) preserves outputs
 in `.ipynb` and uses the newer representation for inputs. CLI synchronization is
-explicit; automatic save integration requires Jupytext in the Jupyter server
+explicit through `load-clean sync --source saved-file.ipynb` (or its paired `.py`);
+selecting that path does not force it to win over a newer counterpart. Pair and
+sync print `created`, `updated`, or `unchanged` for each exact file, comparing
+content bytes; Jupytext may also adjust timestamps. Ordinary helper modules and
+directories are refused. Automatic save integration requires Jupytext in the Jupyter server
 environment. Save/close before switching editors and synchronize before reopening.
-If both copies have diverged, back up both and reconcile them before syncing;
-timestamp selection is not a semantic merge. load-clean build reads the file
-selected, without synchronizing the pair.
+The CLI sees saved disk files and cannot access unsaved editor changes. It does
+not track edit history or detect divergent edits reliably. If both copies were
+edited, back up both and reconcile them before syncing; timestamp selection is
+not a semantic merge. To export the intended saved input without syncing, use
+`load-clean build --source dev_example.ipynb` or
+`load-clean build --source dev_example.py`. To make one copy authoritative for
+future pairing, back up both outside the pair directory, remove the unwanted
+counterpart, then run `load-clean pair --source` on the retained file. Review the
+new pair before reopening an editor. Pair refuses an existing counterpart.
 
 If notebook cells should remain the authoritative implementation of an entire
 library, evaluate [nbdev](https://nbdev.fast.ai/tutorials/tutorial.html), which

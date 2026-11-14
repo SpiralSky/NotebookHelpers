@@ -126,6 +126,38 @@ result = save_cell("helpers.py", preview.source)
 
 The API uses the same new-file, validation, and filesystem policy as the magic.
 
+## Pair and synchronize saved notebooks
+
+Install `load-clean[tools]`, then select one existing file explicitly:
+
+```sh
+load-clean pair --source "notebooks/dev_trial.ipynb"
+load-clean sync --source "notebooks/dev_trial.py"
+```
+
+Pair creates a same-directory `.ipynb`/`py:percent` pair and records Jupytext
+metadata. It accepts a notebook or a percent script (with `# %%` cell markers),
+refuses ordinary modules/directories/other formats, and refuses an existing
+counterpart. Sync requires the recorded `ipynb,py:percent` pairing; it can recreate
+a missing counterpart. Other Jupytext pairing layouts are outside this wrapper's
+scope; use Jupytext directly for those layouts.
+
+Both commands use Jupytext and print each file's exact path with `created`,
+`updated`, or `unchanged`, comparing content bytes. Jupytext can normalize metadata
+or update timestamps even when cell inputs stay the same. Notebook outputs are
+retained for matching cells under Jupytext's rules; edited/new cells may have no
+matching output, and retained outputs do not prove results are current. Sync does
+not execute code.
+
+Sync takes inputs from the most recently modified saved representation and
+outputs from the notebook. Passing `--source` chooses the pair, not a winning
+side. This is not semantic merging or reliable divergent-edit detection. Save and
+close editors first: unsaved edits are inaccessible. If both copies were edited,
+back up and reconcile them before syncing. For deliberate one-file export,
+`load-clean build --source "notebooks/dev_trial.py"` (or the `.ipynb`) reads exactly
+that file without syncing. To re-pair from one chosen copy, back up both elsewhere,
+remove its counterpart, and pair the retained file. No directory-wide sync exists.
+
 ## Build and inspect notebooks
 
 Install the `tools` extra before using notebook commands.

@@ -16,13 +16,16 @@ def _options(parser: argparse.ArgumentParser) -> None:
 
 
 def create_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Build and check cleaned notebooks.")
+    parser = argparse.ArgumentParser(description="Build, check, pair, and synchronize notebooks.")
     commands = parser.add_subparsers(dest="command", required=True)
     for name in ("build", "check"):
         command = commands.add_parser(name, help=f"{name.capitalize()} notebooks")
         _options(command)
         if name == "build":
             command.add_argument("--check", action="store_true", help="Validate without writing")
+    for name in ("pair", "sync"):
+        command = commands.add_parser(name, help="Create a notebook/py:percent pair" if name == "pair" else "Synchronize a saved pair by file recency")
+        command.add_argument("--source", required=True, help="One saved .ipynb or py:percent file (no directory scanning)")
     commands.add_parser("doctor", help="Report optional notebook dependencies")
     return parser
 
@@ -48,6 +51,12 @@ def main(argv: list[str] | None = None) -> int:
             print("Install notebook tools with pip install 'load-clean[tools]'; install nbclient and an IPython kernel for --execute.")
         return 0
     try:
+        if args.command in {"pair", "sync"}:
+            from .sync import pair, sync
+
+            for path, status in (pair if args.command == "pair" else sync)(args.source).items():
+                print(f"{status}: {path}")
+            return 0
         source = Path(args.source)
         if not source.exists():
             raise FileNotFoundError(f"Source does not exist: {source}")

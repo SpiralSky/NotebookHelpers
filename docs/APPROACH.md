@@ -28,9 +28,10 @@ These are implementation observations, not measured user difficulties:
   resolves load-clean magics, and clears prior outputs. Execution is opt-in.
   Explicit file selection works with paired notebooks; directory selection
   rejects pairs as output collisions. Build does not synchronize pairs.
-- `sync.py` has a Python helper, but the CLI does not expose synchronization.
-  The helper scans all top-level `.py` files rather than providing a guided
-  pairing/conflict workflow. Do not promote it as the main user interface yet.
+- `load-clean pair` and `load-clean sync` now wrap Jupytext for one explicit
+  notebook/percent pair, report content changes, and refuse ordinary helper
+  modules and directory scanning. Build ambiguity names both explicit choices.
+  Sync uses saved-file recency; it does not detect divergent edit history.
 - Default imports have normal Python cache behavior. Inline definitions are a
   snapshot until rerun. Source status detects changes but does not refresh
   computations or prove that notebook results match source on disk.
@@ -75,8 +76,13 @@ function editing.
 | --- | --- | --- |
 | P0 — this session | Reorganize onboarding around the complete development loop | README has a runnable export; workflow explains pairing versus modules, reload behavior, source ownership, Git review, and generated artifacts; literal commands receive technical verification. |
 | P1 — complete | Safe promotion of a prototype cell into a module | User can preview destination/content, create a new module without implicit execution, and get a usable import. Existing files are refused by default; any replacement is explicit and atomic. Invalid Python leaves files unchanged. Document removing the old definition/writer cell and adding a test. Start with whole-cell/new-file scope, not AST merging. |
-| P2 | Pairing and build selection experience | Provide a discoverable route to Jupytext pairing/sync. Identify pair ambiguity with concrete valid file choices; do not silently select a stale side. Preserve outputs and report whether files changed. Test conflicts and missing optional dependencies. |
+| P2 — complete | Pairing and build selection experience | Provide a discoverable route to Jupytext pairing/sync. Identify pair ambiguity with concrete valid file choices; do not silently select a stale side. Preserve outputs and report whether files changed. Test conflicts and missing optional dependencies. |
 | P3 | Feedback and reproducibility | Distinguish check from write while preserving script compatibility, identify source and destination, and explain stale inline snapshots. Verify edited-module feedback and fresh-kernel behavior; never imply a static check executes code. |
+
+P2 ships explicit `pair --source FILE` and `sync --source FILE` commands. Pair
+refuses an existing counterpart; sync requires recorded `ipynb,py:percent`
+metadata. Output preservation follows Jupytext matching-cell rules. Build/check
+keep path-only stdout and never implicitly sync. P3 remains next.
 
 P1 ships `%%load_clean_save [--preview] path.py`: whole-cell creation with
 existing parents, symlink refusal, and atomic publication without replacement.
@@ -125,7 +131,7 @@ usability study was performed. These are technical checks, not UX measurements.
 
 1. Read this document before choosing work. Ordinary implementation does not need
    the approach skill; an explicit approach revisit does.
-2. Do one bounded unit, built/checked and committed. P1 is complete; the next unit is P2.
+2. Do one bounded unit, built/checked and committed. P1 and P2 are complete; the next unit is P3.
    Read only current handoff state if needed; keep the queue here authoritative.
 3. Preserve default imports, explicit skeleton stubs, optional dependencies,
    static inspection, non-destructive editing, and opt-in execution. Existing
