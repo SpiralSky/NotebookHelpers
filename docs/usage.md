@@ -1,5 +1,8 @@
 # Usage and limits
 
+For the complete experiment → module → Git → export journey, start with
+[the workflow guide](workflow.md). This page is the command and API reference.
+
 ## Notebook modes
 
 Load `%load_ext load_clean` once per IPython session. The cell magic accepts

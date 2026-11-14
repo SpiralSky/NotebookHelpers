@@ -1,56 +1,61 @@
 # load-clean
 
-Load selected Python definitions into notebooks and export notebooks without
-`%%load_clean` cells. Python 3.10–3.14 is covered by CI.
+Experiment in notebooks, keep reusable Python in files, and embed selected
+helpers when exporting notebooks. Python 3.10–3.14 is covered by CI.
 
-This is a pre-1.0 project. Review generated code before sharing or executing it;
-API stability and a maintenance or response-time SLA are not promised.
+Use ordinary imports for development, Jupytext for Git-friendly notebook text,
+and load-clean for selected source embedding and clean notebook delivery.
+Saving notebook functions back into modules is currently a manual step.
 
-## Install
+## Start here
+
+From a source checkout, in the environment used by your notebook kernel:
 
 ```sh
-python -m pip install '.[notebook,tools]'
+python -m pip install -e '.[notebook,tools]' ipykernel
+cd examples
+python -m load_clean_tools.cli build --source dev_example.ipynb --output ../build --execute
 ```
 
-Run this from a source checkout. The core package needs no IPython installation.
-The `notebook` extra adds IPython; `tools` adds notebook parsing, synchronization,
-and execution dependencies. Contributors can use `python -m pip install -e '.[dev]'`.
+This writes `build/example.ipynb` at the repository root and runs its assertion
+and greeting in a fresh kernel. Run from `examples` so the helper module can be
+found. Omit `--execute` to build without executing code. The original notebook
+is preserved; an existing generated output is replaced.
 
-## Quickstart
+Follow [the notebook-to-files workflow](docs/workflow.md) for interactive setup,
+rapid iteration, saving prototypes into modules, text pairing, Git review, and
+project layout. A notebook frontend is installed separately; the `notebook`
+extra supplies IPython, not JupyterLab.
 
-Given an importable `helpers.py` containing `def greet(name): return f"Hello {name}"`,
-load the extension in an IPython notebook:
+## Choose an export mode
 
-```python
-%load_ext load_clean
-```
-
-Then run a cell:
-
-```python
-%%load_clean
-from helpers import greet
-```
-
-The default mode executes the import. It does not embed source or execute the
-rest of the cell as arbitrary Python. Use an optional final list to select names:
+Load `%load_ext load_clean` once in your notebook, then run:
 
 ```python
 %%load_clean inline
-from helpers import greet
-[greet]
+from example_helpers import greet
 ```
 
-`inline` embeds selected definitions and supported static local dependencies.
-Unsupported dependencies raise errors instead of silently creating incomplete
-exports. `skeleton` produces teaching stubs whose callable bodies raise
-`NotImplementedError`; these stubs are not working implementations.
+| Mode | Result |
+| --- | --- |
+| `default` (or no mode) | Execute and preserve an ordinary import |
+| `inline` | Embed selected definitions and supported static local dependencies |
+| `skeleton` | Create exercise stubs that raise `NotImplementedError` |
 
-```sh
-load-clean --help
-load-clean-build --help
-```
+The magic body accepts imports and an optional final selection list, not arbitrary
+Python experiments. Embedding does not vendor every dependency and rejects
+unsupported constructs. Use ordinary imports when embedding is unnecessary.
 
-`load-clean` is the primary CLI. `load-clean-build` remains a compatibility alias.
-See [usage and limitations](docs/usage.md), [migration](docs/migration.md), and
-[support policy](docs/support.md).
+## Reference and development
+
+- [Command and API reference, modes, and limits](docs/usage.md)
+- [Migration](docs/migration.md) and [support policy](docs/support.md)
+- [Project direction and prioritized UX work](docs/APPROACH.md)
+
+`load-clean` is the primary CLI; `load-clean-build` remains a compatibility alias.
+Use `load-clean --help` to see commands. Core source resolution needs no IPython;
+`tools` adds notebook parsing, pairing, and execution dependencies. Contributors
+can install `python -m pip install -e '.[dev]'`.
+
+This is a pre-1.0 project. Review generated code before sharing or executing it;
+API stability and a maintenance or response-time SLA are not promised.
