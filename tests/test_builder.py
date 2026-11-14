@@ -161,6 +161,37 @@ def test_example_build_and_execute(tmp_path, monkeypatch):
     assert notebook.cells[1].outputs[0].text.strip() == "Hello, world!"
 
 
+@pytest.mark.parametrize("prefix", ["\n", "\n\n", " \n\t\n"])
+@pytest.mark.parametrize("mode", ["default", "inline", "skeleton"])
+def test_export_magic_after_blank_lines(tmp_path, prefix, mode):
+    from IPython.core.inputtransformer2 import TransformerManager
+
+    (tmp_path / "helpers.py").write_text("def double(x):\n    return x * 2\n", encoding="utf-8")
+    source = prefix + f"%%load_clean {mode}\nfrom helpers import double\n[double]\n"
+    assert "run_cell_magic('load_clean'" in TransformerManager().transform_cell(source)
+    parsed = parse_load_clean_cell(source)
+    assert parsed is not None and parsed.mode == mode and parsed.names == ["double"]
+    notebook = Notebook([Cell(cell_type="code", source=source, metadata={}, outputs=[], execution_count=None)])
+    exported = clean_notebook(notebook, source_roots=[tmp_path]).cells[0].source
+    assert "%%load_clean" not in exported
+    if mode == "default":
+        assert exported == "from helpers import double"
+    else:
+        namespace = {}
+        exec(exported, namespace)
+        if mode == "inline":
+            assert namespace["double"](4) == 8
+        else:
+            with pytest.raises(NotImplementedError):
+                namespace["double"](4)
+
+
+def test_load_clean_marker_inside_string_is_preserved():
+    source = '\ntext = """\n%%load_clean inline\nfrom helpers import double\n"""'
+    notebook = Notebook([Cell(cell_type="code", source=source, metadata={}, outputs=[], execution_count=None)])
+    assert clean_notebook(notebook).cells[0].source == source
+
+
 @pytest.mark.parametrize("prefix", ["", "\n", "\n\n", " \n\t\n"])
 def test_untagged_save_cell_requires_removal(prefix, monkeypatch):
     from IPython.core.inputtransformer2 import TransformerManager

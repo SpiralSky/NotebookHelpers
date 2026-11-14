@@ -24,13 +24,13 @@ def parse_line(line, cell):
     return mode, header or next((s.strip() for s in cell.splitlines() if s.strip()), '')
 
 def is_load_clean_cell(source):
-    lines = source.splitlines()
+    lines = source.lstrip().splitlines()
     return bool(lines and lines[0].strip().split(None, 1)[0:1] == ['%%load_clean'])
 
 def parse_load_clean_cell(source):
     if not is_load_clean_cell(source):
         return None
-    lines = source.splitlines()
+    lines = source.lstrip().splitlines()
     header = lines[0].strip()[len('%%load_clean'):].strip()
     parts = header.split(None, 1)
     mode = parts.pop(0) if parts and parts[0] in VALID_MODES else 'default'
