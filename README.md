@@ -5,7 +5,9 @@ helpers when exporting notebooks. Python 3.10–3.14 is covered by CI.
 
 Use ordinary imports for development, Jupytext for Git-friendly notebook text,
 and load-clean for selected source embedding and clean notebook delivery.
-Saving notebook functions back into modules is currently a manual step.
+Promote a prototype with `%%load_clean_save --preview helpers.py`, then remove
+`--preview` to create a new module and replace the writer cell with an import.
+See [save semantics and export tagging](docs/usage.md#save-a-prototype-as-a-module).
 
 ## Start here
 

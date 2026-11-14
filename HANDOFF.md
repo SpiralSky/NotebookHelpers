@@ -4,6 +4,16 @@ Updated: 2026-11-14. Baseline: `0edf184` on `main`.
 
 ## Current state and next-session request
 
+P1 is complete in the commit containing this update: `%%load_clean_save`
+previews or atomically creates a new whole-cell module without execution;
+existing paths are refused and replacement is unsupported. Parents must exist,
+symlinks are refused, and exports reject untagged save cells. Core save API,
+file/race safety tests, magic tests, export workflow tests, and guidance are added.
+Verification: 49 tests passed without skips (including fresh-kernel promotion
+export); isolated sdist/wheel build passed. Initial socket/network sandbox
+failures were resolved through normal escalation. No human predictions tested.
+Continue with P2, then P3 below; their acceptance conditions remain unchanged.
+
 The user requests a handoff for implementing **all remaining work** from the UX
 review in the next session. This document covers P1–P3 and final verification.
 Read `docs/APPROACH.md` for the governing decisions, then execute the backlog in
@@ -23,7 +33,7 @@ layout; do not spend the session on package renames or another approach review.
 
 ## P1: safely promote a prototype cell into a module
 
-Start here. Relevant files:
+Completed. Original contract retained below. Relevant files:
 
 - `src/load_clean/extension.py`: `LoadCleanMagics`, error handling, current
   preview/check/materialize/status conventions.

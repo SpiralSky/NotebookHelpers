@@ -159,3 +159,48 @@ def test_example_build_and_execute(tmp_path, monkeypatch):
     notebook = nbformat.read(target, as_version=4)
     assert "%%load_clean" not in notebook.cells[0].source
     assert notebook.cells[1].outputs[0].text.strip() == "Hello, world!"
+
+
+def test_untagged_save_cell_requires_removal():
+    notebook = Notebook([Cell(cell_type='code', source='%%load_clean_save helpers.py\nx = 1', metadata={})])
+    with pytest.raises(ValueError, match='Cell 1: Remove the save cell or tag it load-clean-remove'):
+        clean_notebook(notebook)
+
+
+@pytest.mark.skipif(nbformat is None, reason='nbformat not installed')
+def test_saved_module_export_journey(tmp_path, monkeypatch):
+    from load_clean.api import save_cell
+
+    monkeypatch.syspath_prepend(str(tmp_path))
+    module = tmp_path / 'promoted_helpers.py'
+    save_cell(module, 'def double(value):\n    return value * 2\n')
+    notebook = nbformat.v4.new_notebook(cells=[
+        nbformat.v4.new_code_cell('%load_ext load_clean', metadata={'tags': ['load-clean-remove']}),
+        nbformat.v4.new_code_cell('%%load_clean_save promoted_helpers.py\nraise RuntimeError("must not run")',
+                                 metadata={'tags': ['load-clean-remove']}),
+        nbformat.v4.new_code_cell('%%load_clean inline\nfrom promoted_helpers import double'),
+        nbformat.v4.new_code_cell('assert double(4) == 8'),
+    ])
+    source = tmp_path / 'dev_promoted.ipynb'
+    nbformat.write(notebook, source)
+    original = source.read_bytes()
+    before = module.read_bytes()
+    destination = tmp_path / 'build'
+    build(source, output=destination, check=True)
+    assert not destination.exists()
+    target = build(source, output=destination)
+    result = nbformat.read(target, as_version=4)
+    assert len(result.cells) == 2
+    namespace = {}
+    for cell in result.cells:
+        assert '%%load_clean' not in cell.source
+        assert cell.outputs == [] and cell.execution_count is None
+        exec(cell.source, namespace)
+    assert source.read_bytes() == original
+    assert module.read_bytes() == before
+    pytest.importorskip("nbclient")
+    pytest.importorskip("ipykernel")
+    executed = nbformat.read(build(source, output=destination, execute=True), as_version=4)
+    assert all(cell.execution_count is not None for cell in executed.cells)
+    assert source.read_bytes() == original
+    assert module.read_bytes() == before

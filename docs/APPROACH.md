@@ -74,12 +74,12 @@ function editing.
 | Priority | Unit | Done when |
 | --- | --- | --- |
 | P0 — this session | Reorganize onboarding around the complete development loop | README has a runnable export; workflow explains pairing versus modules, reload behavior, source ownership, Git review, and generated artifacts; literal commands receive technical verification. |
-| P1 — next implementation | Safe promotion of a prototype cell into a module | User can preview destination/content, create a new module without implicit execution, and get a usable import. Existing files are refused by default; any replacement is explicit and atomic. Invalid Python leaves files unchanged. Document removing the old definition/writer cell and adding a test. Start with whole-cell/new-file scope, not AST merging. |
+| P1 — complete | Safe promotion of a prototype cell into a module | User can preview destination/content, create a new module without implicit execution, and get a usable import. Existing files are refused by default; any replacement is explicit and atomic. Invalid Python leaves files unchanged. Document removing the old definition/writer cell and adding a test. Start with whole-cell/new-file scope, not AST merging. |
 | P2 | Pairing and build selection experience | Provide a discoverable route to Jupytext pairing/sync. Identify pair ambiguity with concrete valid file choices; do not silently select a stale side. Preserve outputs and report whether files changed. Test conflicts and missing optional dependencies. |
 | P3 | Feedback and reproducibility | Distinguish check from write while preserving script compatibility, identify source and destination, and explain stale inline snapshots. Verify edited-module feedback and fresh-kernel behavior; never imply a static check executes code. |
 
-The P1 interface is a proposal, not an available command. Before implementing,
-inspect existing magic conventions and settle create/preview/replace semantics.
+P1 ships `%%load_clean_save [--preview] path.py`: whole-cell creation with
+existing parents, symlink refusal, and atomic publication without replacement.
 Do not promise automatic dependency extraction, safe arbitrary merging, or
 bidirectional editing. Reorder this queue if actual user feedback identifies a
 larger obstacle. A GUI, broad resolver expansion, and package renames are deferred.
@@ -125,7 +125,7 @@ usability study was performed. These are technical checks, not UX measurements.
 
 1. Read this document before choosing work. Ordinary implementation does not need
    the approach skill; an explicit approach revisit does.
-2. Do one bounded unit, built/checked and committed. Default next unit is P1.
+2. Do one bounded unit, built/checked and committed. P1 is complete; the next unit is P2.
    Read only current handoff state if needed; keep the queue here authoritative.
 3. Preserve default imports, explicit skeleton stubs, optional dependencies,
    static inspection, non-destructive editing, and opt-in execution. Existing

@@ -48,6 +48,48 @@ selection list.
 These operations do not prove that generated code is safe or semantically
 identical under every runtime environment.
 
+## Save a prototype as a module
+
+```python
+%%load_clean_save --preview helpers.py
+# Source formatting and comments are preserved.
+def double(value):
+    return value * 2
+```
+
+Remove `--preview` to create a new file. Quote paths containing spaces.
+Preview prints the resolved destination and exact cell body without writing,
+creating directories, importing modules, or executing the body. Preview may
+inspect a destination that already exists; creation always refuses it. Syntax is
+validated in both modes, including rejection of non-UTF-8 encoding declarations.
+A `.py` suffix and existing parent directory are required. Relative paths use the
+kernel's working directory; `~` is expanded. Symlinks in the destination or any
+parent component (including dangling destination links) are refused. Filesystem
+parents must be trusted and remain stable during the operation.
+
+Creation writes a temporary sibling, then publishes the complete file using an
+atomic hard link that cannot overwrite a competing destination; the temporary
+file is removed afterward. The filesystem must support hard links. A failed
+validation, write, or publication preserves existing files. There is no overwrite
+or replacement option: edit the authoritative module directly. The complete body
+is saved as UTF-8 without newline or formatting normalization, and never executed.
+Dependencies from kernel state are not extracted.
+
+After saving, replace the writer cell with an import and add a behavior test.
+No notebook cell is rewritten automatically. If retained temporarily, give the
+writer cell the `load-clean-remove` tag, along with extension setup cells.
+Build removes these cells before resolution. An untagged `%%load_clean_save`
+cell is rejected by check/build with a removal/tagging instruction.
+
+The report suggests `import module` only when standard filesystem path lookup
+finds that exact file, including package and namespace-package layouts. Package
+initializers are inspected by path without execution. Unsupported paths, invalid
+module identifiers, and shadowed modules receive source-setup guidance instead.
+Custom import hooks and already cached modules can affect runtime imports; use
+a fresh kernel to verify. For a consumer project's `src/` layout, an editable
+installation in the kernel environment (`python -m pip install -e .`) normally
+provides the source path. Saving neither installs nor imports anything.
+
 ## Static resolution
 
 Embedding reads local Python source and follows supported static dependencies.
@@ -72,6 +114,17 @@ source = resolve_cell("from helpers import greet", ["greet"], mode="inline")
 ```
 
 The same mode semantics and strict embedding limits apply to API calls.
+Whole-cell saving also has an IPython-independent API:
+
+```python
+from load_clean.api import save_cell
+
+preview = save_cell("helpers.py", "answer = 42\n", preview=True)
+result = save_cell("helpers.py", preview.source)
+# result.path, result.source, result.import_line (None if setup is needed)
+```
+
+The API uses the same new-file, validation, and filesystem policy as the magic.
 
 ## Build and inspect notebooks
 

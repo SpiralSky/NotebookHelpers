@@ -2,8 +2,8 @@
 
 Use notebooks for experiments and explanations, Python modules for reusable
 functions, and tests for behavior you want to preserve. load-clean brings selected
-module definitions into a notebook when you need an embedded export. It does not
-currently save edited notebook definitions back into modules.
+module definitions into a notebook when you need an embedded export. Use its whole-cell save action to promote a prototype into a new module;
+after promotion, edit the module directly.
 
 ## Choose what you want to save
 
@@ -85,23 +85,43 @@ refreshes imports before cell execution, but has limitations around changed clas
 structure and extension modules. Restart and run all cells before accepting a
 result; reloading does not rerun earlier computations or refresh old results.
 
-For a function prototyped in a notebook, copy its definition and required imports
-into a module, replace the defining cell with an import, and put a stable example
-into a test. This is currently a manual promotion step. For a new, small module,
-IPython also supports:
+For a function prototyped in a notebook, first preview its complete module
+source (include required imports and globals). The parent directory must exist:
 
 ```python
-%%writefile scratch_helpers.py
+%%load_clean_save --preview scratch_helpers.py
+# Keep this comment in the module.
 def double(value):
     return value * 2
 ```
 
-This writes the cell but does not execute its Python body. Run
-`from scratch_helpers import double` in another cell to use it.
-[`%%writefile`](https://ipython.readthedocs.io/en/stable/interactive/magics.html#cellmagic-writefile)
-overwrites the entire destination; it does not merge functions. After promotion,
-remove the writer cell or turn it into documentation so rerunning the notebook
-cannot overwrite later module edits. Do not keep using two editable copies.
+Preview prints the absolute destination and exact source without writing or
+executing anything. Remove `--preview` and run the cell to create the file.
+Existing files are refused, including files created by a competing writer.
+The body is saved exactly as UTF-8, with Python syntax checked first; it is not
+executed. This saves the entire cell, without merging or capturing kernel state.
+
+**Transfer ownership to the module:** replace the writer/definition cell with
+`from scratch_helpers import double`, then add a test such as
+`assert double(4) == 8` in your test suite. Edit `scratch_helpers.py` from then on.
+The magic leaves the existing notebook cell unchanged. If you temporarily keep
+it for reference, tag it `load-clean-remove`; a default rerun refuses to overwrite
+later edits. There is no replacement option. An untagged save cell blocks export
+with instructions to remove or tag it, so exported notebooks cannot accidentally
+write a module. Tag the extension setup cell too.
+
+For delivery, replace the ordinary import with `%%load_clean inline` plus
+`from scratch_helpers import double`, as in the supplied example. Save the
+notebook, synchronize any pair, then check/build the selected file. Build removes
+tagged writer/setup cells before resolving imports and clears prior outputs;
+`--execute` verifies the result in a fresh kernel. Keep the stable test in the
+module's test suite independently of the notebook.
+
+The save report suggests an import for ordinary filesystem layouts already on
+Python's source path, including packages. For `src/my_project` layouts, install
+the consumer project with `python -m pip install -e .` into the kernel environment
+before importing. Saving never runs that setup or the suggested import. See
+[the reference](usage.md#save-a-prototype-as-a-module) for path and safety limits.
 
 Use `inline` when preparing an export, as in the supplied example. It reads
 supported source from disk when its cell is run or the notebook is built; it does

@@ -56,3 +56,29 @@ def test_materialize_creates_new_input(shell, monkeypatch):
     assert 'def answer' in calls[0][0]
     assert calls[0][1] is False
     assert 'answer' not in shell.user_ns
+
+
+def test_save_preview_and_create_preserve_shell(shell, tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(shell, 'set_next_input', lambda *a, **k: pytest.fail('rewrote cell'))
+    marker = tmp_path / 'body_executed'
+    source = f'# exact comment\nopen({str(marker)!r}, "w").close()\nanswer = 42\n'
+    path = tmp_path / 'saved_magic.py'
+    before = dict(shell.user_ns)
+    shell.run_cell_magic('load_clean_save', f'--preview {path}', source)
+    assert capsys.readouterr().out == f'Preview destination: {path}\nExact source follows:\n{source}'
+    assert not path.exists() and not marker.exists()
+    shell.run_cell_magic('load_clean_save', str(path), source)
+    assert path.read_bytes() == source.encode('utf-8')
+    assert 'import saved_magic' in capsys.readouterr().out
+    assert not marker.exists()
+    assert shell.user_ns == before
+    path.write_text('# later edit\n')
+    with pytest.raises(UsageError, match='already exists'):
+        shell.run_cell_magic('load_clean_save', str(path), source)
+    assert path.read_text() == '# later edit\n'
+
+
+@pytest.mark.parametrize('line, source', [('', 'x = 1'), ('--replace x.py', 'x = 1'), ('x.py', 'def bad(')])
+def test_save_errors_are_usage_errors(shell, line, source):
+    with pytest.raises(UsageError):
+        shell.run_cell_magic('load_clean_save', line, source)

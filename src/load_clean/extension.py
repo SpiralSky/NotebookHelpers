@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import shlex
 from pathlib import Path
 from typing import Any
 
 from IPython.core.error import UsageError
 from IPython.core.magic import Magics, cell_magic, line_magic, magics_class
 
-from .api import resolve_cell
+from .api import resolve_cell, save_cell
 from .parser import parse_import, parse_load_clean_cell
 from .resolver import resolve_module
 
@@ -64,6 +65,32 @@ class LoadCleanMagics(Magics):
             raise UsageError(f"No definitions found in {module}")
         exec(compile(source, str(path), "exec"), self.shell.user_ns)
         self.sources[module] = (path, _fingerprint(path))
+
+    @cell_magic
+    def load_clean_save(self, line: str, cell: str = "") -> None:
+        """Preview or create a whole-cell module, without executing its body."""
+        try:
+            arguments = shlex.split(line)
+            preview = bool(arguments and arguments[0] == "--preview")
+            if preview:
+                arguments.pop(0)
+            if len(arguments) != 1 or arguments[0].startswith("-"):
+                raise ValueError("Usage: %%load_clean_save [--preview] path.py")
+            result = save_cell(arguments[0], cell, preview=preview)
+        except (ValueError, SyntaxError, OSError) as exc:
+            raise UsageError(str(exc)) from exc
+        if preview:
+            print(f"Preview destination: {result.path}\nExact source follows:")
+            print(result.source, end="")
+            return
+        print(f"Wrote {result.path}")
+        if result.import_line:
+            print(f"Replace this writer cell with: {result.import_line}")
+        else:
+            print("Configure the project source path (for example, pip install -e .) "
+                  "before importing this module; no import was run.")
+        print("The module now owns this code. Add a test; remove this writer cell "
+              "or tag it load-clean-remove before export.")
 
     @line_magic
     def load_clean_preview(self, line: str) -> None:
