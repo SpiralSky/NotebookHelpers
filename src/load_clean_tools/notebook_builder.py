@@ -36,7 +36,8 @@ def resolve_cells(notebook: Any, *, source_roots: list[str | Path] | None = None
         if cell.cell_type != "code":
             continue
         try:
-            first_line = cell.source.splitlines()[0:1]
+            # IPython ignores leading blank lines before recognizing cell magics.
+            first_line = cell.source.lstrip().splitlines()[0:1]
             if first_line and first_line[0].strip().split(None, 1)[0:1] == ["%%load_clean_save"]:
                 raise ValueError("Remove the save cell or tag it load-clean-remove before export")
             parsed = parse_load_clean_cell(cell.source)

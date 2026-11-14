@@ -161,10 +161,35 @@ def test_example_build_and_execute(tmp_path, monkeypatch):
     assert notebook.cells[1].outputs[0].text.strip() == "Hello, world!"
 
 
-def test_untagged_save_cell_requires_removal():
-    notebook = Notebook([Cell(cell_type='code', source='%%load_clean_save helpers.py\nx = 1', metadata={})])
+@pytest.mark.parametrize("prefix", ["", "\n", "\n\n", " \n\t\n"])
+def test_untagged_save_cell_requires_removal(prefix, monkeypatch):
+    from IPython.core.inputtransformer2 import TransformerManager
+    from load_clean_tools import notebook_builder as builder
+
+    source = prefix + '%%load_clean_save helpers.py\nx = 1\n'
+    # Establish that these sources would invoke the writer in IPython.
+    assert "run_cell_magic('load_clean_save'" in TransformerManager().transform_cell(source)
+    assert parse_load_clean_cell(source) is None
+    monkeypatch.setattr(builder, 'parse_load_clean_cell', lambda source: pytest.fail('save cell reached import parser'))
+    notebook = Notebook([Cell(cell_type='code', source=source, metadata={})])
     with pytest.raises(ValueError, match='Cell 1: Remove the save cell or tag it load-clean-remove'):
         clean_notebook(notebook)
+
+
+@pytest.mark.parametrize("prefix", ["", "\n", "\n\n", " \n\t\n"])
+def test_tagged_save_with_leading_whitespace_is_removed(prefix, monkeypatch):
+    from load_clean_tools import notebook_builder as builder
+
+    monkeypatch.setattr(builder, 'parse_load_clean_cell', lambda source: pytest.fail('removed cell reached import parser'))
+    notebook = Notebook([Cell(cell_type='code', source=prefix + '%%load_clean_save helpers.py\nx = 1',
+                              metadata={'tags': ['load-clean-remove']})])
+    assert clean_notebook(notebook).cells == []
+
+
+def test_save_marker_inside_python_string_is_preserved():
+    source = 'text = """\n%%load_clean_save helpers.py\nx = 1\n"""'
+    notebook = Notebook([Cell(cell_type='code', source=source, metadata={}, outputs=[], execution_count=None)])
+    assert clean_notebook(notebook).cells[0].source == source
 
 
 @pytest.mark.skipif(nbformat is None, reason='nbformat not installed')

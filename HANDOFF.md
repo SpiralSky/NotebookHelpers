@@ -22,7 +22,7 @@ retain path-only stdout and never synchronize. Docs explain saved/unsaved edits,
 recency versus merging, reconciliation, and selecting one input deliberately.
 Verification: 61 tests passed without skips; disposable pair/sync/check/build CLI
 walkthrough passed with spaces in paths; isolated sdist/wheel build passed.
-P3 and final integration are complete in the commit containing this update.
+P3 and final integration are complete in `23ff1f5`.
 Check/build retain path-only stdout, with static/no-write and source/destination
 feedback on stderr. Explicit repeatable `--source-root` replaces static lookup
 roots without mutating sys.path or importing helpers. Errors retain original
@@ -39,7 +39,14 @@ no output; build/check preserved original helper and selected sources; fresh
 kernel output was 400 and the export had no writer or development magic.
 Kernel sockets/trust database and build/install network used normal escalation.
 No implementation blockers remain. Human predictions remain untested. The
-coordinator will arrange the independent review; do not start another review.
+independent review found a save-cell rejection bypass through leading blank
+lines. The follow-up commit containing this update fixes the confirmed finding
+by checking the first non-whitespace line before import parsing. Regression
+coverage confirms IPython would execute each blank-line variant, untagged cells
+are rejected, tagged cells are removed before parsing, and a marker inside a
+Python string is preserved. Targeted regressions: 9 passed (16 deselected).
+Full suite after the fix: 74 passed, no skips; isolated sdist/wheel build passed.
+The one-time independent review is complete; no further review loop requested.
 
 The user requests a handoff for implementing **all remaining work** from the UX
 review in the next session. This document covers P1–P3 and final verification.
