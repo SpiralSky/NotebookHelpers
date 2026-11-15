@@ -13,6 +13,12 @@ A release tag must exactly match `v` followed by the version in `pyproject.toml`
 Release artifacts are attached to a GitHub release only after the test matrix
 and wheel build succeed. This workflow does not publish to PyPI.
 
+To prepare a release, update `project.version` in `pyproject.toml`, build and
+verify the wheel and source distribution, and commit the version change. Push
+the commit and a matching `vVERSION` tag (for example, `v0.0.3`). Confirm that
+the tag's CI run succeeds and the GitHub release includes both distributions.
+Use a new version and tag when correcting a release; do not move published tags.
+
 Generated Python and notebook execution have the same trust requirements as
 running the original project code. Use trusted source files and review exports;
 this package is not a sandbox.

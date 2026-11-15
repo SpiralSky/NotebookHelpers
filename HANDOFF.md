@@ -4,6 +4,14 @@ Updated: 2026-11-15. Historical P3 baseline: `426802d` on `main`.
 
 ## Current state and next-session request
 
+Release preparation: package version corrected to 0.0.3 to match the new v0.0.3
+tag; historical v0.0.2 is left intact. Support docs now describe version/tag
+alignment and release verification. Isolated source/wheel builds passed; a fresh
+core-only wheel installation outside the checkout verified version 0.0.3, both
+CLI entry points, core imports, source metadata and the packaged sync fix.
+The sync fix's full suite passed (180 tests) and its main-branch GitHub CI passed.
+Tag CI must pass before the release workflow publishes distribution assets.
+
 Sync wrapper follow-up: pair/sync now invoke the supported Jupytext CLI via
 `sys.executable -m jupytext` with checked subprocess exit status, preserving quiet
 path reporting. Nonzero exits become RuntimeError with the child failure chained;
