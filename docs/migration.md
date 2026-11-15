@@ -16,6 +16,22 @@ export the original import and require the project at runtime; they do not expor
 isolated selected bodies without their dependencies. No frontend plugin or
 background watcher is installed.
 
+## Configurable exports
+
+Existing notebook modes remain available. Build policies can now be chosen
+independently of notebook syntax; the defaults still resolve load-clean cells,
+retain imports, remove tagged/legacy cells, and clear saved outputs.
+
+For example, `load-clean build dev_analysis.ipynb --strip-setup --no-clobber`
+removes standalone extension setup cells and refuses an existing output.
+`--load-clean strip` instead keeps the literal Python body, including unsynced
+linked-cell edits, without resolving imports or checking baselines. Use that
+policy deliberately; it does not provide module globals or package context.
+`--load-clean keep` cannot be combined with execution.
+
+See [build options and their limits](usage.md#build-and-inspect-notebooks) for
+batch selection, destinations, cleaning, execution, and reporting controls.
+
 ## Earlier compatibility changes
 
 Install `.[notebook]` for the IPython extension and `.[tools]` for notebook build

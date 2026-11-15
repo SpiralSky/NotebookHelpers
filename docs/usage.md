@@ -396,8 +396,11 @@ Successful output paths go to stdout and diagnostics to stderr. `-0, --null` use
 NUL-separated paths for scripts. `-q, --quiet` suppresses successful output but
 never errors. `-v, --verbose` adds the selected policies and input count; it cannot
 be combined with quiet. Usage errors exit 2, build/check failures exit 1, and success
-exits 0. Check/dry-run success says explicitly that no output was written and no
-code executed; it does not establish that runtime imports or assertions pass.
+exits 0. Here, usage errors mean argument-parser errors (such as an unknown
+option); validation errors, including incompatible execution settings or mixed
+positional/`--source` inputs, exit 1. Check/dry-run success says explicitly that no
+output was written and no code executed; it does not establish that runtime
+imports or assertions pass.
 
 ### Static helper lookup
 

@@ -12,7 +12,16 @@ From a source checkout, in the environment used by your notebook kernel:
 python -m pip install -e '.[notebook,tools]' ipykernel
 ```
 
-Run `%load_ext load_clean` once, then select the code using a normal import:
+For an existing module, make it importable in the kernel environment. For this
+example, save `helpers.py` beside the notebook with:
+
+```python
+def double(value):
+    return value * 2
+```
+
+Run `%load_ext load_clean` in a separate setup cell, then select the code using
+a normal import in another cell:
 
 ```python
 %%load_clean
@@ -54,6 +63,19 @@ A notebook frontend is installed separately; the `notebook`
 extra supplies IPython, not JupyterLab.
 
 ## Export and compatibility
+
+To try an export immediately, run these commands from the checkout root after
+installing the dependencies above:
+
+```sh
+load-clean check examples/dev_example.ipynb --source-root examples
+load-clean build examples/dev_example.ipynb --source-root examples --execute
+```
+
+Check validates without writing or executing. Build creates `build/example.ipynb`
+and executes it in a fresh kernel; its final output is `Hello, world!`. This
+checked-in example uses `inline` to embed the helper function. The explicit source
+root locates it for static resolution without installing the example helper.
 
 Tag the extension setup cell `load-clean-remove`, save `dev_analysis.ipynb`, then:
 

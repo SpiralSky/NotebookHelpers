@@ -1,8 +1,17 @@
 # Implementation handoff
 
-Updated: 2026-11-14. P3 baseline: `426802d` on `main`.
+Updated: 2026-11-15. Historical P3 baseline: `426802d` on `main`.
 
 ## Current state and next-session request
+
+Documentation follow-up: README now provides the missing `helpers.py` prerequisite
+and a runnable check/executed export using the checked-in example. Migration covers
+configurable exports; the reference distinguishes parser and validation exit codes.
+No runtime changes were needed. Verification: 175 tests passed without skips;
+isolated sdist/wheel build passed. Disposable README commands produced
+`Hello, world!`, preserved source bytes, and confirmed check writes nothing.
+The documented import link returned 42 and requested an editable replacement.
+Frontend application of that request remains unverified.
 
 Build configurability follow-up: notebook syntax/modes are intentionally unchanged;
 the user wants to discuss their removal separately. Build/check now accept multiple
