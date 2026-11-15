@@ -140,7 +140,7 @@ class ImportLink:
 
     @property
     def cell(self):
-        return f'%%load_clean --import {shlex.quote(self.statement)} --file {shlex.quote(str(self.path))} --base {fingerprint(self.source)}\n{self.source}'
+        return f'%%load_clean --file {shlex.quote(str(self.path))} --base {fingerprint(self.source)}\n{self.statement}\n\n{self.source}'
 
 
 def parse_link_header(line: str):
@@ -151,6 +151,40 @@ def parse_link_header(line: str):
         raise ValueError('Invalid generated import-link header; retain --import, --file and --base')
     import_node(args[1])
     return args[1], args[3], args[5]
+
+
+def parse_link_cell(line: str, cell: str | None):
+    """Read current links and legacy --import links without accessing files."""
+    legacy = parse_link_header(line)
+    if legacy is not None:
+        if cell is None:
+            raise ValueError('Generated import links require a cell body')
+        return (*legacy, cell)
+    args = shlex.split(line)
+    if not args or args[0] != '--file':
+        return None
+    if len(args) != 4 or args[2] != '--base' or not re.fullmatch('[0-9a-f]{64}', args[3]):
+        raise ValueError('Invalid generated import-link header; retain --file and --base')
+    if cell is None:
+        raise ValueError('Generated import links require a cell body')
+    tree = ast.parse(cell)
+    if not tree.body:
+        raise ValueError('Keep the import statement below %%load_clean')
+    node = tree.body[0]
+    statement = ast.unparse(node)
+    import_node(statement)
+    lines = cell.splitlines(keepends=True)
+    # The generated separator belongs to the link, not the editable source.
+    if lines[node.end_lineno - 1].strip().endswith(';') or any(
+        other.lineno == node.end_lineno for other in tree.body[1:]
+    ):
+        raise ValueError('Put the link import on its own line')
+    source = ''.join(lines[node.end_lineno:])
+    if source.startswith('\r\n'):
+        source = source[2:]
+    elif source.startswith('\n'):
+        source = source[1:]
+    return statement, args[1], args[3], source
 
 
 def synchronize(statement: str, local: str | None = None, baseline: str | None = None, expected_path: str | None = None) -> ImportLink:

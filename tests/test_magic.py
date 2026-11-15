@@ -129,7 +129,7 @@ def test_linked_cell_complete_cycle(shell, tmp_path, monkeypatch, capsys):
     shell.run_cell_magic('load_clean', line, body)
     assert shell.user_ns['double'](4) == 16
     assert '* 4' in calls[-1][0]
-    assert 'Updated from file' in capsys.readouterr().out
+    assert capsys.readouterr().out == ''
 
     # A competing notebook edit cannot overwrite the changed file or execute.
     with pytest.raises(UsageError, match='Sync conflict'):
@@ -172,16 +172,28 @@ def test_ignored_editor_replacement_does_not_lose_work(shell, tmp_path, monkeypa
     assert path.read_text() == 'x = 2\n'
 
 
-def test_bare_import_creates_editable_selected_link(shell, tmp_path, monkeypatch):
+def test_bare_import_creates_editable_selected_link(shell, tmp_path, monkeypatch, capsys):
     calls = []
     monkeypatch.setattr(shell, 'set_next_input', lambda source, replace: calls.append(source))
+    monkeypatch.setattr(shell.display_pub, 'publish', lambda *a, **kw: pytest.fail('unexpected display output'))
     shell.run_cell_magic('load_clean', '', 'from magic_example import answer as result')
     assert shell.user_ns['result']() == 3
     header, source = calls[-1].split('\n', 1)
-    assert '--import' in header and source.startswith('def answer')
+    assert '--import' not in header
+    assert source.startswith('from magic_example import answer as result\n\ndef answer')
     shell.run_cell_magic('load_clean', header[len('%%load_clean '):], source.replace('return VALUE', 'return VALUE + 2'))
     assert shell.user_ns['result']() == 5
     assert (tmp_path / 'magic_example.py').read_text() == 'VALUE = 3\ndef answer():\n    return VALUE + 2\n'
+    header, source = calls[-1].split('\n', 1)
+    path = tmp_path / 'magic_example.py'
+    path.write_text(path.read_text().replace('VALUE + 2', 'VALUE + 4'))
+    shell.run_cell_magic('load_clean', header[len('%%load_clean '):], source)
+    assert shell.user_ns['result']() == 7
+    assert 'return VALUE + 4' in calls[-1]
+    with pytest.raises(UsageError, match='Sync conflict'):
+        shell.run_cell_magic('load_clean', header[len('%%load_clean '):], source.replace('VALUE + 2', 'VALUE + 8'))
+    assert 'return VALUE + 4' in path.read_text()
+    assert capsys.readouterr().out == ''
 
 
 def test_bare_module_import_binds_module(shell, monkeypatch):
@@ -190,3 +202,20 @@ def test_bare_module_import_binds_module(shell, monkeypatch):
     shell.run_cell_magic('load_clean', '', 'import magic_example as helpers')
     assert shell.user_ns['helpers'].answer() == 3
     assert 'VALUE = 3' in calls[-1]
+    header, body = calls[-1].split('\n', 1)
+    shell.run_cell_magic('load_clean', header[len('%%load_clean '):], body.replace('VALUE = 3', 'VALUE = 9'))
+    assert shell.user_ns['helpers'].answer() == 9
+
+
+def test_legacy_import_header_migrates_silently(shell, tmp_path, monkeypatch, capsys):
+    import shlex
+    from load_clean.import_link import fingerprint, synchronize
+
+    link = synchronize('from magic_example import answer as result')
+    line = f'--import {shlex.quote(link.statement)} --file {shlex.quote(str(link.path))} --base {fingerprint(link.source)}'
+    calls = []
+    monkeypatch.setattr(shell, 'set_next_input', lambda source, replace: calls.append(source))
+    shell.run_cell_magic('load_clean', line, link.source)
+    assert shell.user_ns['result']() == 3
+    assert '--import' not in calls[-1].split('\n', 1)[0]
+    assert capsys.readouterr().out == ''

@@ -22,7 +22,11 @@ Relative imports inside that module, `__file__`, and module globals work. Top-le
 effects run each time; dependencies imported by the module retain normal caching.
 Old external `from` bindings and previously computed results are not refreshed.
 
-The generated header carries `--import`, `--file`, and `--base`. Keep all three.
+The generated header carries `--file` and `--base`. The import statement stays
+immediately below the magic, followed by a blank line and the editable source.
+Keep both header options and the import. Older `--import` headers remain readable
+and convert to this layout on Run. Successful loading/syncing adds no cell output;
+prints and displays from your module code still appear.
 The file is pinned and the baseline hashes only the selected source. Unrelated
 file edits can coexist with a selected-definition edit: the current file supplies
 the surrounding source and only selected spans are replaced. Different edits to
@@ -71,22 +75,23 @@ On each Run:
 | --- | --- | --- |
 | Unchanged | Unchanged | Execute cell |
 | Changed | Unchanged | Validate, save file, execute |
-| Unchanged | Changed | Validate, request refreshed cell, display source, execute file version |
+| Unchanged | Changed | Validate, request refreshed cell, execute file version |
 | Changed | Same content as cell | Mark in sync, execute |
 | Changed | Differently changed | Error with file/cell diff; no write or execution |
 
 Syntax is checked before writing. A runtime exception does not undo a successful
-sync; status is printed before execution. All code in the linked cell belongs to
+sync. All code in the linked cell belongs to
 the module, including imports and top-level effects. Put temporary experiments
 and assertions in separate cells. Other imported module objects, old function
 references, and previous notebook results are not automatically refreshed.
 
 IPython's `set_next_input` requests insertion/replacement. No frontend acknowledgment
-is available and no GUI integration is shipped. If the request is ignored, copy
-the displayed linked cell (including its updated baseline) before editing. The
-updated source is displayed when the baseline changes; stale headers cause safe
-conflicts rather than implicit overwrite. Loading does not execute; a file-only
-update on Run executes the displayed updated source even if replacement is ignored.
+is available and no GUI integration is shipped. If the request is ignored, the
+cell will not refresh and there is no automatic output fallback. Preserve edits
+and reload in a frontend that supports replacement before continuing; stale
+headers cause safe conflicts rather than implicit overwrite. Loading does not
+execute; a file-only update on Run executes the file version even if replacement
+is ignored.
 
 Resolve conflicts by preserving both copies, reconciling their contents, and
 making the cell and file identical before running again. Or load the file into

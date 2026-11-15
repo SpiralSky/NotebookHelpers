@@ -30,8 +30,8 @@ from helpers import magnitude
 ```
 
 Run once. The module executes and the tool requests an editable replacement cell
-containing the function source plus a generated header. Keep the header, including
-its import identity, file path and baseline. Edit the function and run again:
+containing the import statement followed by the function source, plus a generated
+header. Keep the import and the header's file path and baseline. Edit the function and run again:
 changes synchronize to its definition in the file, preserving the `math` import
 and unrelated definitions. The function runs with the module's globals and package
 context. Aliases and multiple names work, for example
@@ -41,8 +41,9 @@ Use `import helpers` instead to link the complete module; calculations then use
 `helpers.magnitude(...)`. Imports use the kernel environment's filesystem module
 paths. For a `src/` project, make the package importable in that environment.
 
-If your editor ignores replacement requests, copy the displayed linked cell and
-its header before editing. Put temporary computations in separate cells:
+Successful sync adds no cell output; module code can still print or display.
+If your editor ignores replacement requests, preserve edits and reload using a
+frontend that supports replacement before continuing. Put temporary computations in separate cells:
 
 ```python
 assert magnitude(3, 4) == 5
@@ -88,7 +89,8 @@ to force an overwrite. Git commits help you review and recover committed version
 they do not protect every uncommitted edit.
 
 The editor update is a request, not an acknowledged hook. If your editor ignores
-it, the displayed refreshed cell is the fallback; copy it before editing further.
+it, the cell stays stale and there is no automatic source display as a fallback.
+Preserve edits and reload using a frontend that supports replacement.
 There is no automatic merge and no background file watcher. Avoid saving from two
 editors during the same run; the final byte comparison and atomic write are not a
 filesystem compare-and-swap. Detailed limits are in [the reference](usage.md).

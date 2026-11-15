@@ -7,13 +7,12 @@ from typing import Any
 
 from IPython.core.error import UsageError
 from IPython.core.magic import Magics, cell_magic, line_cell_magic, line_magic, magics_class
-from IPython.display import Code, display
 
 from .api import resolve_cell, save_cell
 from .parser import parse_import, parse_load_clean_cell
 from .resolver import resolve_module
-from .linked import fingerprint, load_link, parse_header, sync_link
-from .import_link import parse_link_header, synchronize, execute as execute_import_link
+from .linked import load_link, parse_header, sync_link
+from .import_link import parse_link_cell, synchronize, execute as execute_import_link
 
 
 def _fingerprint(path: Path) -> str:
@@ -53,20 +52,14 @@ class LoadCleanMagics(Magics):
         """Load a linked file, or synchronize and execute its editable cell."""
         imported = None
         try:
-            import_header = parse_link_header(line)
+            import_header = parse_link_cell(line, cell)
             if import_header is not None:
-                if cell is None:
-                    raise ValueError('Generated import links require a cell body')
-                statement, path, baseline = import_header
-                imported = synchronize(statement, cell, baseline, path)
+                statement, path, baseline, source = import_header
+                imported = synchronize(statement, source, baseline, path)
             elif cell is not None and not line.strip():
                 imported = synchronize(cell)
             if imported is not None:
                 self.shell.set_next_input(imported.cell, replace=True)
-                print(f'{imported.status}: {imported.path}. Executing in module context.')
-                if import_header is None or fingerprint(imported.source) != import_header[2]:
-                    print('Editor update requested; if ignored, copy the linked cell below before editing:')
-                    display(Code(imported.cell, language='python'))
         except (ValueError, SyntaxError, OSError) as exc:
             raise UsageError(str(exc)) from exc
         if imported is not None:
@@ -79,16 +72,10 @@ class LoadCleanMagics(Magics):
                     raise ValueError('Usage: %load_clean path.py (load without execution)')
                 result = load_link(linked[0])
                 self.shell.set_next_input(result.cell, replace=False)
-                print(f'{result.status}: {result.path}. New cell requested; if your editor does not insert it, copy the cell below.')
-                display(Code(result.cell, language='python'))
                 return
             if linked is not None:
                 result = sync_link(linked[0], cell, linked[1])
                 self.shell.set_next_input(result.cell, replace=True)
-                print(f'{result.status}: {result.path}. Synced before execution.')
-                if fingerprint(result.source) != linked[1]:
-                    print('Editor update requested. If not applied, copy this linked cell before editing:')
-                    display(Code(result.cell, language='python'))
         except (ValueError, SyntaxError, OSError) as exc:
             raise UsageError(str(exc)) from exc
         if linked is not None:

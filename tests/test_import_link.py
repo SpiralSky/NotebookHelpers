@@ -2,7 +2,7 @@ import sys
 
 import pytest
 
-from load_clean.import_link import execute, fingerprint, parse_link_header, synchronize
+from load_clean.import_link import execute, fingerprint, parse_link_cell, synchronize
 
 
 @pytest.fixture
@@ -33,8 +33,11 @@ def test_selected_import_executes_with_package_dependencies_and_alias(module):
     assert namespace['twice'](5) == 10
     assert namespace['twice'].__module__ == 'linked_project.helpers'
     assert set(namespace) == {'twice'}
-    assert parse_link_header(link.cell.split('\n', 1)[0][len('%%load_clean '):]) == (
-        link.statement, str(module), fingerprint(link.source))
+    header, body = link.cell.split('\n', 1)
+    assert body.startswith(link.statement + '\n\n')
+    assert '--import' not in header
+    assert parse_link_cell(header[len('%%load_clean '):], body) == (
+        link.statement, str(module), fingerprint(link.source), link.source)
 
 
 def test_selected_write_preserves_unrelated_source_and_external_edits(module):
@@ -47,6 +50,26 @@ def test_selected_write_preserves_unrelated_source_and_external_edits(module):
     namespace = {}
     execute(result, namespace)
     assert namespace['double'](3) == 7
+
+
+def test_multiline_link_import_and_leading_source_whitespace(module):
+    link = synchronize('from linked_project.helpers import double as twice, other')
+    header, body = link.cell.split('\n', 1)
+    body = body.replace(link.statement, 'from linked_project.helpers import (\n    double as twice,\n    other,\n)')
+    parsed = parse_link_cell(header[len('%%load_clean '):], body)
+    assert parsed == (link.statement, str(module), fingerprint(link.source), link.source)
+    module.write_text('\n\n' + module.read_text())
+    whole = synchronize('import linked_project.helpers as helpers')
+    header, body = whole.cell.split('\n', 1)
+    assert parse_link_cell(header[len('%%load_clean '):], body)[3] == whole.source
+
+
+@pytest.mark.parametrize('body', ['', 'x = 1\n', 'from linked_project.helpers import double; double = 3\n'])
+def test_link_import_required_on_its_own_line(module, body):
+    link = synchronize('from linked_project.helpers import double')
+    header = link.cell.split('\n', 1)[0][len('%%load_clean '):]
+    with pytest.raises(ValueError):
+        parse_link_cell(header, body)
 
 
 def test_selected_conflict_does_not_modify_file(module):

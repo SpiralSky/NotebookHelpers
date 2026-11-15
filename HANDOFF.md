@@ -4,6 +4,20 @@ Updated: 2026-11-15. Historical P3 baseline: `426802d` on `main`.
 
 ## Current state and next-session request
 
+Import layout and output follow-up: generated `%%load_clean` cells now retain
+the identifying Python import below the magic, followed by a blank separator and
+editable source. Headers retain `--file` and `--base` for guarded synchronization.
+Legacy `--import` cells remain readable and convert on Run. Loading and sync no
+longer print status or display fallback source; module code keeps normal output.
+Export accepts both layouts without reading/writing source files; explicit strip
+still preserves the literal body, now including the identifying import.
+Verification: 186 tests passed without skips; isolated sdist/wheel build passed.
+Tests cover selected/module round trips, alias binding, file refresh, conflict
+refusal, multiline imports, silent sync, legacy conversion and static exports.
+Frontend replacement is still unacknowledged and GUI behavior unverified: ignored
+requests leave stale cells without an output fallback; preserve edits and reload
+using a frontend that supports replacement before continuing.
+
 Release preparation: package version corrected to 0.0.3 to match the new v0.0.3
 tag; historical v0.0.2 is left intact. Support docs now describe version/tag
 alignment and release verification. Isolated source/wheel builds passed; a fresh

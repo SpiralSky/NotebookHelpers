@@ -213,11 +213,16 @@ def test_link_loader_requires_removal_before_export(prefix):
     assert clean_notebook(Notebook([cell])).cells == []
 
 
-def test_import_link_exports_import_without_source_access(tmp_path):
+@pytest.mark.parametrize('legacy', [False, True])
+def test_import_link_exports_import_without_source_access(tmp_path, legacy):
     from load_clean.import_link import ImportLink
+    from load_clean.linked import fingerprint
+    import shlex
 
     body = 'def double(x):\n    return x * 2\n'
     source = ImportLink('from unavailable import double', tmp_path / 'missing.py', body, body, '').cell
+    if legacy:
+        source = f'%%load_clean --import {shlex.quote("from unavailable import double")} --file {shlex.quote(str(tmp_path / "missing.py"))} --base {fingerprint(body)}\n{body}'
     cell = Cell(cell_type='code', source=source, metadata={}, outputs=[], execution_count=None)
     assert clean_notebook(Notebook([cell])).cells[0].source == 'from unavailable import double'
     assert not (tmp_path / 'missing.py').exists()

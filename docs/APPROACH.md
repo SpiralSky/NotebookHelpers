@@ -37,8 +37,13 @@ stays available for selective export, while ordinary linked-cell export removes
 only its header and never synchronizes files. Existing import and creation-only
 commands remain compatible but are no longer the recommended authoring workflow.
 
+User feedback follow-up: generated import links retain a Python import below the
+magic instead of a `--import` argument. Keep file and baseline options for guarded
+sync. Legacy headers remain readable. Successful load/sync operations are silent;
+module code retains its ordinary output. This supersedes the output fallback.
+
 IPython requests cell replacement; it cannot acknowledge frontend application.
-Always show refreshed source as a fallback when updating the baseline. This is a
+Unsupported frontends can leave cells stale without an output fallback. This is a
 known usability limit, not evidence of a verified JupyterLab/VS Code GUI flow.
 Writes validate syntax, recheck disk bytes and publish atomically; an external
 writer after the final comparison can still race. Runtime errors leave synced

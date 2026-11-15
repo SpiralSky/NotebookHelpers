@@ -33,7 +33,9 @@ Use `import helpers` to link the entire module, or
 `from helpers import double as twice` for an alias. Multiple explicit selected
 names are supported. Module-relative imports and globals retain their package context.
 
-Keep the generated header (including `--base`) and edit/run normally. Cell-only
+The generated cell keeps the import immediately below the magic, followed by
+the editable source. Keep that import and the header's `--file` and `--base`,
+then edit/run normally. Cell-only
 edits save to the file; file-only edits refresh the cell and run the new source;
 different edits on both sides produce an error before writing or executing.
 Run your tests or calculations in separate cells, for example `double(21)`.
@@ -55,8 +57,10 @@ an existing whole file without execution, use `%load_clean helpers.py`; remove o
 tag that one-time loader cell `load-clean-remove` before export.
 
 Cell insertion/replacement uses IPython editor requests, not a JupyterLab plugin.
-If your frontend ignores them, copy the displayed updated cell, including its
-header, before editing further. There is no background file watcher.
+Successful load/sync operations produce no status messages or source displays;
+output from your own module code still appears. If your frontend ignores editor
+requests, the cell will not refresh: preserve edits and reload in a frontend
+that supports replacement before continuing. There is no background file watcher.
 
 Follow [the workflow guide](docs/workflow.md) for conflicts, export, and Git review.
 A notebook frontend is installed separately; the `notebook`
