@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
+import sys
 
 from .notebook_builder import _dependency
 
@@ -25,14 +27,14 @@ def _inputs(path: str | Path):
 
 
 def _run(source: Path, *, pair: bool) -> dict[Path, str]:
-    # Pass an argv list to Jupytext: paths (including spaces) never enter a shell.
-    from jupytext.cli import jupytext
-
+    # Use the supported CLI in this interpreter; paths never enter a shell.
     paths = [source.with_suffix(".ipynb"), source.with_suffix(".py")]
     before = {path: path.read_bytes() if path.exists() else None for path in paths}
     args = ["--quiet", "--set-formats", _FORMATS] if pair else ["--quiet", "--sync"]
-    if jupytext([*args, "--", str(source)]) != 0:
-        raise RuntimeError("Jupytext could not synchronize the pair; inspect its diagnostic and reconcile saved copies before retrying")
+    try:
+        subprocess.run([sys.executable, "-m", "jupytext", *args, "--", str(source)], check=True)
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(f"Jupytext could not synchronize the pair (exit {exc.returncode}); inspect its diagnostic and reconcile saved copies before retrying") from exc
     return {path: "created" if before[path] is None else "unchanged" if path.read_bytes() == before[path] else "updated" for path in paths}
 
 

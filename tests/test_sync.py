@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -62,6 +64,60 @@ def test_pair_from_percent_and_restore_missing_counterpart(tmp_path):
     assert result[ipynb] == "created"
     ipynb.unlink()
     assert sync(source)[ipynb] == "created"
+
+
+def test_sync_restores_missing_percent_counterpart_and_keeps_outputs(tmp_path):
+    source = tmp_path / "dev saved notebook.ipynb"
+    nbformat = notebook(source)
+    pair(source)
+    text = source.with_suffix(".py")
+    text.unlink()
+    assert sync(source)[text] == "created"
+    assert "value = 1" in text.read_text()
+    assert nbformat.read(source, as_version=4).cells[0].outputs[0].text == "kept\n"
+
+
+@pytest.mark.parametrize("creating", [True, False])
+def test_jupytext_subprocess_uses_current_interpreter(tmp_path, monkeypatch, creating):
+    from load_clean_tools.sync import _run
+
+    source = tmp_path / "dev saved notebook.py"
+    source.write_text("# %%\nvalue = 1\n")
+    calls = []
+
+    def run(args, *, check):
+        calls.append((args, check))
+        source.with_suffix(".ipynb").write_text("{}")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    assert _run(source, pair=creating)[source.with_suffix(".ipynb")] == "created"
+    options = ["--quiet", "--set-formats", "ipynb,py:percent"] if creating else ["--quiet", "--sync"]
+    assert calls == [([sys.executable, "-m", "jupytext", *options, "--", str(source)], True)]
+
+
+@pytest.mark.parametrize("command", ["pair", "sync"])
+def test_subprocess_failure_propagates_without_success_report(tmp_path, monkeypatch, capsys, command):
+    source = tmp_path / "dev saved notebook.ipynb"
+    notebook(source)
+    if command == "sync":
+        pair(source)
+    paths = [source, source.with_suffix(".py")]
+    before = {p: p.read_bytes() if p.exists() else None for p in paths}
+
+    def fail(args, *, check):
+        assert check is True
+        raise subprocess.CalledProcessError(7, args)
+
+    monkeypatch.setattr(subprocess, "run", fail)
+    with pytest.raises(RuntimeError, match="exit 7") as error:
+        (pair if command == "pair" else sync)(source)
+    assert isinstance(error.value.__cause__, subprocess.CalledProcessError)
+    capsys.readouterr()
+    assert main([command, "--source", str(source)]) == 1
+    report = capsys.readouterr()
+    assert report.out == ""
+    assert "exit 7" in report.err
+    assert {p: p.read_bytes() if p.exists() else None for p in paths} == before
 
 
 def test_refuse_existing_counterpart_without_mutation(tmp_path):

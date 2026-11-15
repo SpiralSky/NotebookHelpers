@@ -4,6 +4,13 @@ Updated: 2026-11-15. Historical P3 baseline: `426802d` on `main`.
 
 ## Current state and next-session request
 
+Sync wrapper follow-up: pair/sync now invoke the supported Jupytext CLI via
+`sys.executable -m jupytext` with checked subprocess exit status, preserving quiet
+path reporting. Nonzero exits become RuntimeError with the child failure chained;
+the load-clean CLI returns 1. Verification: 17 sync tests passed on Jupytext 1.19.6,
+covering both directions, both missing counterparts, preserved notebook outputs,
+paths with spaces, interpreter selection, and failure propagation.
+
 Documentation follow-up: README now provides the missing `helpers.py` prerequisite
 and a runnable check/executed export using the checked-in example. Migration covers
 configurable exports; the reference distinguishes parser and validation exit codes.

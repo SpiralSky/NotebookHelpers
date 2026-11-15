@@ -259,7 +259,9 @@ counterpart. Sync requires the recorded `ipynb,py:percent` pairing; it can recre
 a missing counterpart. Other Jupytext pairing layouts are outside this wrapper's
 scope; use Jupytext directly for those layouts.
 
-Both commands use Jupytext and print each file's exact path with `created`,
+Both commands run `python -m jupytext` using the current Python interpreter;
+a nonzero Jupytext exit fails the command and does not report success.
+They print each file's exact path with `created`,
 `updated`, or `unchanged`, comparing content bytes. Jupytext can normalize metadata
 or update timestamps even when cell inputs stay the same. Notebook outputs are
 retained for matching cells under Jupytext's rules; edited/new cells may have no
