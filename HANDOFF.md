@@ -4,6 +4,13 @@ Updated: 2026-11-15. Historical P3 baseline: `426802d` on `main`.
 
 ## Current state and next-session request
 
+Release v0.0.5 packages the comment-baseline/import-destination follow-up below.
+Isolated sdist/wheel builds passed; a fresh core-only wheel outside the checkout
+verified version 0.0.5, CLI entry points and the persisted comment layout. The
+underlying change passed all 192 tests. User requested release first, followed by
+a repo/UX review. User-facing changes require approval; internal cleanup is
+authorized. Mode removal/renaming and copy/materialize behavior remain proposals.
+
 Comment-baseline follow-up: import-linked cells now generate a bare `%%load_clean`,
 the identifying import on the next line, and a separate
 `# Referenced Source: sha256:HASH` comment before the editable source. User accepts
@@ -15,7 +22,7 @@ remain silent and export reads saved text without accessing source files.
 Verification: 192 tests passed without skips; isolated sdist/wheel builds passed.
 Coverage includes baseline recovery from saved text, intentional import redirect,
 invalid/missing reference refusal, old-layout migration and static export.
-This change is committed locally after v0.0.4; it is not in that published tag.
+This change is included in v0.0.5; it is not in the older v0.0.4 tag.
 
 Release follow-up: package version is 0.0.4 for the import-body/silent-sync fix,
 with matching `v0.0.4` tag. Isolated sdist/wheel builds passed; a fresh core-only
