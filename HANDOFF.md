@@ -4,6 +4,20 @@ Updated: 2026-11-14. P3 baseline: `426802d` on `main`.
 
 ## Current state and next-session request
 
+Build configurability follow-up: notebook syntax/modes are intentionally unchanged;
+the user wants to discuss their removal separately. Build/check now accept multiple
+positional or repeated --source inputs, recursive include/exclude selection, output
+directory/file/suffix controls, dry-run, no-clobber, four load-clean policies,
+import-only-cell removal, tag/output/metadata controls, execution settings and
+quiet/verbose/NUL-delimited reporting. Defaults preserve previous behavior.
+Batch destinations are preflighted; writes are individually atomic. Retained magics
+cannot be executed by build, preventing accidental sync through --load-clean keep.
+See the current build reference for semantics and limits.
+Verification: 175 tests passed without skips; isolated sdist/wheel build passed.
+Disposable CLI walkthrough verified literal stripping with fresh-kernel execution,
+recursive filtered dry-run, exact output/no-clobber and snapshot preservation;
+all source notebooks and helper files retained their original bytes.
+
 Import-addressed follow-up: bare `%%load_clean` now accepts `import module` or
 `from module import name` to create editable module/selected-definition links.
 Generated headers preserve import identity, source path and selection baseline.

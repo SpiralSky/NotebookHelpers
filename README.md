@@ -67,6 +67,26 @@ links export the notebook body as ordinary Python. Export does not sync files:
 run the linked cells and save the notebook first. The output is
 `build/analysis.ipynb`; source inputs are preserved, generated outputs replaced.
 
+Build policies are configurable without changing notebook syntax:
+
+```sh
+# Remove only load-clean headers, retaining their Python bodies and imports.
+load-clean build dev_analysis.ipynb -o deliverables --load-clean strip --strip-setup
+
+# Preview recursive selection and output paths without writing anything.
+load-clean build notebooks -r --include '*.ipynb' --exclude 'scratch/*' -o deliverables -n
+
+# Choose an exact output file and refuse overwriting an existing one.
+load-clean build dev_analysis.ipynb -O deliverables/report.ipynb --no-clobber
+```
+
+`--load-clean resolve|strip|remove|keep` controls magic handling. Imports remain
+unless `--imports remove-cells` explicitly drops import-only cells. Output state,
+tags, metadata, execution settings and reporting have separate controls. Run
+`load-clean build --help` or read [the build reference](docs/usage.md#build-and-inspect-notebooks).
+Removing imports or stripping a selected-definition header does not automatically
+supply that code's dependencies.
+
 The older import-selection interface remains available for selective embedding:
 
 Load `%load_ext load_clean` once in your notebook, then run:

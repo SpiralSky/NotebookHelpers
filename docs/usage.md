@@ -277,59 +277,144 @@ remove its counterpart, and pair the retained file. No directory-wide sync exist
 
 ## Build and inspect notebooks
 
-From a source checkout, install `python -m pip install -e '.[tools]'` before
-using notebook commands. Add `ipykernel` for execution in this environment.
+Install the `tools` extra before using notebook commands; add `ipykernel` for
+execution. `load-clean build --help` and `load-clean check --help` show grouped
+options. Existing `--source`, `--output`, `--check` and the `load-clean-build`
+entry point remain supported. Notebook magic syntax has not changed.
 
 ```sh
-load-clean build --source notebooks --output build --prefix dev_
+load-clean build dev_analysis.ipynb -o deliverables
+load-clean build notebooks -r --include '*.ipynb' --exclude 'scratch/*' -o deliverables -n
 load-clean check --source notebooks --output build
 load-clean doctor
 ```
 
-`--source` accepts a file or directory. Check resolves and validates without
-writing output; `build --check` is an equivalent spelling. Doctor reports the
-environment and optional dependencies. Legacy invocations such as
-`load-clean-build --source notebooks --output build` remain supported.
+### Input and output selection
 
-Build writes outputs atomically and rejects input overwrites, output name
-collisions, and ambiguous paired sources in directory input. The default source
-and output directories are `notebooks` and `build`.
+| Option | Meaning |
+| --- | --- |
+| `SOURCE ...` or repeated `-s, --source PATH` | Files/directories; choose one spelling, not both. Defaults to `notebooks`. |
+| `-r, --recursive` | Search input directories recursively and preserve relative subdirectories in outputs. |
+| Repeated `--include GLOB` | Override directory discovery patterns; defaults to `dev_*.ipynb` and `dev_*.py`. |
+| Repeated `--exclude GLOB` | Exclude directory-discovered files. |
+| `-o, --output, --output-dir DIR` | Output directory, default `build`. |
+| `-O, --output-file FILE` | Exact `.ipynb` filename; requires one explicit source file and excludes `-o`. |
+| `--prefix TEXT` | Default discovery prefix and prefix removed from output stems; default `dev_`. Use `--prefix ''` for none. |
+| `--suffix TEXT` | Append to output stems, before `.ipynb`. |
+| `--no-clobber` | Refuse existing outputs, including an output that appears during writing. |
+| `-n, --dry-run, --check` | Validate transformations and print intended paths without writing or executing. |
+
+Quote globs so the shell does not expand them. Patterns match either basenames or
+paths relative to each source directory, using case-sensitive shell-style matching.
+They only filter directory discovery, not explicitly named files. Only `.ipynb`
+and `.py` sources are considered. Repeated references to the same resolved input
+are processed once. A nested output directory is excluded from directory discovery.
+Separate input directories preserve their own relative structure; conflicting output
+names are errors, not silently renamed. Explicit input selection does not synchronize
+Jupytext pairs. Directory pairs remain ambiguous unless a filter selects one side.
+
+All input/output mappings are checked for collisions, input overwrites, and
+no-clobber failures before any output is written. Each output is published atomically;
+a batch is not a transaction. A later parsing/execution failure leaves earlier
+successful outputs in place. Run a dry-run first to validate a whole batch.
+
+### Cleaning policies
+
+Defaults retain the established behavior: resolve load-clean cells, preserve
+imports, remove `load-clean-remove` tagged cells and legacy markers, clear old
+outputs/counts, and retain metadata.
+
+| `--load-clean` | Behavior |
+| --- | --- |
+| `resolve` (default) | Respect each cell's mode. Inline/skeleton selections resolve statically; import links become imports and reject unsynced cell edits; path links become ordinary Python bodies. |
+| `strip` | Remove the `%%load_clean` header and validate the unchanged Python body. Do not resolve imports or consult linked files/baselines. |
+| `remove` | Remove whole cells starting with a recognized load-clean cell/line magic, including loader, writer, preview, check and status commands. |
+| `keep` | Leave load-clean commands unchanged. Other cleaning policies still apply. Execution is forbidden because retained commands could write source files. |
+
+`strip` is deliberately literal: an original import-selection body keeps its imports
+and optional symbol list; an expanded linked cell keeps its definitions, including
+unsynced notebook edits. It does not supply external globals or package context.
+Such a cell may need its dependencies supplied elsewhere before it can execute.
+`resolve` is usually the right choice for a runnable export. No policy synchronizes
+modules or writes linked source files. Outside `remove`/`keep`, loader and writer
+cells still require removal/tagging: stripping a writer could unexpectedly execute
+code that was only intended to be saved.
+
+Other cleaning controls:
+
+| Option | Meaning |
+| --- | --- |
+| `--imports keep` (default) | Preserve ordinary imports, including dependencies introduced by inline resolution. |
+| `--imports remove-cells` | After magic processing, remove code cells whose Python statements are all imports. Comments are allowed. Mixed code/import cells and imports inside functions stay unchanged. |
+| `--outputs clear` (default) or `keep` | Clear or retain existing outputs and execution counts before optional execution. Keeping them does not certify freshness. Execution produces new results. |
+| Repeated `--remove-tag TAG` | Remove extra tagged cells in addition to `load-clean-remove`. |
+| `--keep-tagged-cells` | Disable tag-based removal; mutually exclusive with `--remove-tag`. Other removal rules still apply. |
+| `--no-legacy-markers` | Ignore exact `#$<AUTOREMOVE>` comment markers. `--legacy-markers` re-enables the default. |
+| `--strip-setup` | Remove standalone `%load_ext load_clean` or `%reload_ext load_clean` setup cells, allowing surrounding comments. Mixed setup/code cells are preserved. |
+| `--clear-metadata` | Remove notebook and cell metadata, including kernelspec, after filtering and from final output. Cell IDs and attachments are retained. |
+| `--drop-empty-cells` | Remove whitespace-only code, Markdown, and raw cells after processing. |
+
+Removing import-only cells can make later code fail unless those names are provided
+elsewhere. It is not a general dependency-removal operation and is never implicit.
+Tag filtering happens first, then magic transformation, import/empty-cell filtering,
+and execution-state/metadata cleanup. Strings containing magic text are not commands.
+
+For an export that changes only load-clean headers and otherwise preserves cells
+and their saved outputs/metadata:
 
 ```sh
-load-clean build --source notebooks --output build --execute
+load-clean build dev_analysis.ipynb -O release/analysis.ipynb \
+  --load-clean strip --imports keep --outputs keep \
+  --keep-tagged-cells --no-legacy-markers
 ```
 
-Execution is opt-in and uses nbclient. It runs notebook code with the privileges
-of the current process; use trusted inputs and a suitable kernel environment.
-Execution cannot be combined with check mode. A successful static check alone
-does not establish that a notebook executes successfully.
+This preserves setup cells too; add `--strip-setup` to remove standalone load-clean
+setup. Retaining unrelated IPython magics may require IPython in the recipient's
+kernel. The loader/writer restrictions above still apply.
 
-Both check spellings keep proposed paths on stdout; their success message on
-stderr explicitly says no code executed and no output was written. Build keeps
-written paths on stdout and identifies source and destination on stderr. Static
-check success does not test runtime imports, assertions, or other cell behavior.
+### Execution and reporting
 
-For helpers that are not installed, select source roots explicitly:
+```sh
+load-clean build dev_analysis.ipynb -o deliverables --strip-setup \
+  --execute --kernel python3 --timeout 120 --execution-dir .
+```
+
+Execution is opt-in (`-x, --execute`) and uses a fresh nbclient kernel. Without
+`--execution-dir`, its working directory is the source notebook's directory.
+Without `--kernel`, notebook kernelspec metadata or nbclient's `python3` fallback
+is used. `--timeout` is per cell, in seconds; omitted or `-1` means no limit.
+Kernel/timeout/working-directory/error settings require `--execute`; check/dry-run
+and `--load-clean keep` cannot execute. Use a suitable kernel when clearing metadata.
+
+By default, execution errors prevent publishing that notebook's output; an old
+output remains intact. `--allow-errors` instead continues through cell errors and
+saves their error outputs. Infrastructure failures still fail. This option's success
+means the notebook was saved, not that every cell succeeded. Notebook execution
+runs ordinary project code with its normal side effects; the builder is not a sandbox.
+
+Successful output paths go to stdout and diagnostics to stderr. `-0, --null` uses
+NUL-separated paths for scripts. `-q, --quiet` suppresses successful output but
+never errors. `-v, --verbose` adds the selected policies and input count; it cannot
+be combined with quiet. Usage errors exit 2, build/check failures exit 1, and success
+exits 0. Check/dry-run success says explicitly that no output was written and no
+code executed; it does not establish that runtime imports or assertions pass.
+
+### Static helper lookup
 
 ```sh
 cd examples
-load-clean check --source dev_example.ipynb --source-root . --output ../build
-load-clean build --source dev_example.ipynb --source-root . --output ../build --execute
+load-clean check dev_example.ipynb --source-root . -o ../build
+load-clean build dev_example.ipynb --source-root . -o ../build --execute
 ```
 
-`--source-root` is repeatable. Roots are relative to the terminal's working
-directory, must be existing directories, and replace `sys.path` lookup for static
-embedding; the first matching source wins. Specify only intended project roots
-in the desired order. No notebook-directory root is added implicitly and no
-helper or parent initializer is imported. This avoids depending on executable
-versus `python -m` path differences or accidentally adding local shadow modules.
-Without the option, existing `sys.path` lookup remains. This setting never edits
-`sys.path`, installs packages, or changes fresh-kernel runtime imports. Install
-the helper project separately when retaining ordinary imports in an export.
+`--source-root` is repeatable. Roots are relative to the terminal working directory,
+must exist, and replace `sys.path` lookup for static embedding. The first matching
+source wins. No notebook-directory root is added implicitly and no helper or parent
+initializer is imported by static resolution. Without the option, existing `sys.path`
+lookup remains. This setting does not change the execution kernel's import path:
+install the helper project separately when retaining ordinary imports in an export.
 
-Inline loads read current on-disk definitions into a snapshot. Edit/save the
-module, rerun the inline cell, then rerun dependent calculations. Ordinary
-imports use Python's normal module cache; reload the module explicitly or use
-IPython autoreload and rerun consumers. `%load_clean_status` detects file changes
-against recorded fingerprints but cannot certify that downstream results are
-fresh, even when it reports unchanged. Nothing automatically reruns cells.
+Inline loads read on-disk definitions into a snapshot. Rerun inline cells and their
+consumers after changing source. Ordinary imports retain Python's normal caching.
+`%load_clean_status` reports recorded source fingerprints; it cannot certify that
+downstream results are current or rerun any computations.

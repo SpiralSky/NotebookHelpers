@@ -4,6 +4,15 @@ Created: 2026-11-14 · Revisited: 2026-11-14 · Revision: 3
 
 ## Current decision — 2026-11-15
 
+Build configurability is the current bounded follow-up. The user explicitly
+deferred decisions about removing or renaming notebook modes: retain all syntax
+and behavior while adding orthogonal export controls. Default cleaning remains
+unchanged. Provide explicit resolve/strip/remove/keep magic policies, import-only
+cell removal, output/metadata/tag policies, flexible batch destinations and
+selection, overwrite protection, execution settings and script-friendly reporting.
+Static checks and builds never synchronize source files; executing retained magic
+is refused. Import removal remains opt-in because dependencies may still be needed.
+
 Follow-up correction: the primary interface must use Python imports, including
 `from module import name`, not require whole-file path links. Bare `%%load_clean`
 now creates an import-addressed link; explicit `default` retains ordinary-import
