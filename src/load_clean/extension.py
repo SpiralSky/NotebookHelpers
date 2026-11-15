@@ -13,6 +13,7 @@ from .api import resolve_cell, save_cell
 from .parser import parse_import, parse_load_clean_cell
 from .resolver import resolve_module
 from .linked import fingerprint, load_link, parse_header, sync_link
+from .import_link import parse_link_header, synchronize, execute as execute_import_link
 
 
 def _fingerprint(path: Path) -> str:
@@ -50,6 +51,27 @@ class LoadCleanMagics(Magics):
     @line_cell_magic
     def load_clean(self, line: str, cell: str | None = None) -> None:
         """Load a linked file, or synchronize and execute its editable cell."""
+        imported = None
+        try:
+            import_header = parse_link_header(line)
+            if import_header is not None:
+                if cell is None:
+                    raise ValueError('Generated import links require a cell body')
+                statement, path, baseline = import_header
+                imported = synchronize(statement, cell, baseline, path)
+            elif cell is not None and not line.strip():
+                imported = synchronize(cell)
+            if imported is not None:
+                self.shell.set_next_input(imported.cell, replace=True)
+                print(f'{imported.status}: {imported.path}. Executing in module context.')
+                if import_header is None or fingerprint(imported.source) != import_header[2]:
+                    print('Editor update requested; if ignored, copy the linked cell below before editing:')
+                    display(Code(imported.cell, language='python'))
+        except (ValueError, SyntaxError, OSError) as exc:
+            raise UsageError(str(exc)) from exc
+        if imported is not None:
+            execute_import_link(imported, self.shell.user_ns)
+            return
         try:
             linked = parse_header(line)
             if cell is None:

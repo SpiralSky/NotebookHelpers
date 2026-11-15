@@ -20,7 +20,7 @@ def shell(tmp_path, monkeypatch):
 
 def test_default_import_uses_own_shell_and_preserves_cell(shell, monkeypatch):
     monkeypatch.setattr(shell, 'set_next_input', lambda *a, **k: pytest.fail('rewrote cell'))
-    shell.run_cell_magic('load_clean', '', 'import magic_example as example')
+    shell.run_cell_magic('load_clean', 'default', 'import magic_example as example')
     assert shell.user_ns['example'].answer() == 3
     assert 'answer' not in shell.user_ns
 
@@ -87,13 +87,13 @@ def test_save_errors_are_usage_errors(shell, line, source):
 def test_edit_reload_and_inline_rerun(shell, tmp_path, capsys):
     import importlib
 
-    shell.run_cell_magic('load_clean', '', 'import magic_example as ordinary')
+    shell.run_cell_magic('load_clean', 'default', 'import magic_example as ordinary')
     shell.run_cell_magic('load_clean', 'inline', 'from magic_example import answer')
     ordinary = shell.user_ns['ordinary']
     old_answer = shell.user_ns['answer']
     old_result = old_answer()
     (tmp_path / 'magic_example.py').write_text('VALUE = 12345\ndef answer():\n    return VALUE\n')
-    shell.run_cell_magic('load_clean', '', 'import magic_example as ordinary')
+    shell.run_cell_magic('load_clean', 'default', 'import magic_example as ordinary')
     assert ordinary.answer() == 3 and old_answer() == 3
     importlib.invalidate_caches()
     importlib.reload(ordinary)
@@ -170,3 +170,23 @@ def test_ignored_editor_replacement_does_not_lose_work(shell, tmp_path, monkeypa
     with pytest.raises(UsageError, match='Sync conflict'):
         shell.run_cell_magic('load_clean', line, 'x = 3\n')
     assert path.read_text() == 'x = 2\n'
+
+
+def test_bare_import_creates_editable_selected_link(shell, tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(shell, 'set_next_input', lambda source, replace: calls.append(source))
+    shell.run_cell_magic('load_clean', '', 'from magic_example import answer as result')
+    assert shell.user_ns['result']() == 3
+    header, source = calls[-1].split('\n', 1)
+    assert '--import' in header and source.startswith('def answer')
+    shell.run_cell_magic('load_clean', header[len('%%load_clean '):], source.replace('return VALUE', 'return VALUE + 2'))
+    assert shell.user_ns['result']() == 5
+    assert (tmp_path / 'magic_example.py').read_text() == 'VALUE = 3\ndef answer():\n    return VALUE + 2\n'
+
+
+def test_bare_module_import_binds_module(shell, monkeypatch):
+    calls = []
+    monkeypatch.setattr(shell, 'set_next_input', lambda source, replace: calls.append(source))
+    shell.run_cell_magic('load_clean', '', 'import magic_example as helpers')
+    assert shell.user_ns['helpers'].answer() == 3
+    assert 'VALUE = 3' in calls[-1]

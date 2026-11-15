@@ -5,7 +5,7 @@ with `python -m pip install -e /path/to/NotebookHelpers[notebook,tools] ipykerne
 (quote the path and extras in shells that expand brackets). The project does not
 require JupyterLab; frontend support for cell insertion/replacement varies.
 
-## Start a linked module
+## Start from an import
 
 Run this setup cell once and tag it `load-clean-remove` for export:
 
@@ -13,33 +13,59 @@ Run this setup cell once and tag it `load-clean-remove` for export:
 %load_ext load_clean
 ```
 
-Create a new file from a complete module cell:
+Suppose your project has `helpers.py` containing:
 
 ```python
-%%load_clean helpers.py
 import math
 
 def magnitude(x, y):
     return math.sqrt(x * x + y * y)
 ```
 
-Running creates the file, executes the body, and requests an updated header with
-an absolute path and baseline hash. Keep that header unchanged. For an existing
-module, run `%load_clean helpers.py` instead: it loads the complete source into a
-new linked cell without executing it. If the editor does not insert/replace cells,
-copy the displayed cell including its header. A differing existing file is never
-silently adopted by a new cell without a baseline.
-Remove the one-time `%load_clean` loader cell or tag it `load-clean-remove`; keep
-the generated linked code cell. Export rejects an untagged loader cell.
+Select that function in a notebook cell:
 
-One cell owns the whole module, including imports and comments. This version does
-not synchronize a single function inside a larger module. Use small helper modules
-when you want small editable cells. Put temporary computations in separate cells:
+```python
+%%load_clean
+from helpers import magnitude
+```
+
+Run once. The module executes and the tool requests an editable replacement cell
+containing the function source plus a generated header. Keep the header, including
+its import identity, file path and baseline. Edit the function and run again:
+changes synchronize to its definition in the file, preserving the `math` import
+and unrelated definitions. The function runs with the module's globals and package
+context. Aliases and multiple names work, for example
+`from helpers import magnitude as norm, another_function`.
+
+Use `import helpers` instead to link the complete module; calculations then use
+`helpers.magnitude(...)`. Imports use the kernel environment's filesystem module
+paths. For a `src/` project, make the package importable in that environment.
+
+If your editor ignores replacement requests, copy the displayed linked cell and
+its header before editing. Put temporary computations in separate cells:
 
 ```python
 assert magnitude(3, 4) == 5
 magnitude(5, 12)
 ```
+
+Selected cells may edit directly defined functions, classes, or simple assignments.
+Keep the selected names intact; edit module-level imports and other shared dependencies
+in the source file or a whole-module link. Re-exports and ambiguous definitions
+raise errors instead of guessing a write target. See [limits](usage.md).
+
+For a new module that cannot yet be imported, the path form remains available:
+
+```python
+%%load_clean new_helpers.py
+def double(value):
+    return value * 2
+```
+
+Path links own the whole file and execute in the notebook namespace. The line form
+`%load_clean path.py` opens an existing whole file without executing it; tag or
+remove that one-time loader cell before exporting. Import-addressed cells above
+are the primary interface for existing modules and selected functions.
 
 ## Edit on either side
 
@@ -53,7 +79,8 @@ notebook, and ordinary file Save only saves the module. Running the linked cell
 is the synchronization point. A runtime failure leaves a successful sync saved;
 invalid syntax prevents a write. Status and execution success are distinct.
 
-If both copies changed differently, Run reports a conflict and a diff. Neither
+If both copies changed the selected source differently, Run reports a conflict and a diff.
+Unrelated file edits are preserved when saving selected definitions. Neither
 copy is written and no cell code executes. Preserve both copies, reconcile them,
 and make their contents identical before running again. Alternatively load the
 file into a new cell and manually transfer edits. Do not delete or change the hash
@@ -66,12 +93,13 @@ There is no automatic merge and no background file watcher. Avoid saving from tw
 editors during the same run; the final byte comparison and atomic write are not a
 filesystem compare-and-swap. Detailed limits are in [the reference](usage.md).
 
-Functions execute in the notebook namespace. Separate `import helpers` consumers
-still obey normal Python caching; they are not automatically reloaded. Previously
-computed notebook results also remain unchanged until their cells run again.
+Import-linked code re-executes the synchronized module with its package context.
+Its top-level effects run on each execution. Dependencies imported by that module
+retain normal Python caching; existing external function references and previously
+computed notebook results remain unchanged until refreshed.
 Restart and run the notebook to check that it does not depend on stale kernel state.
 
-## Export a snapshot
+## Export
 
 Run linked cells, save the notebook as `dev_analysis.ipynb`, then:
 
@@ -80,20 +108,22 @@ load-clean check --source dev_analysis.ipynb --output build
 load-clean build --source dev_analysis.ipynb --output build --execute
 ```
 
-The output is `build/analysis.ipynb`. Linked headers become ordinary Python bodies;
-imports remain inside the cells. Build does not read or synchronize linked files,
-so exports work after those files are moved or removed. Export uses the saved
-notebook snapshot, not unseen edits in the editor or the newest module on disk.
-The extension setup cell must be tagged `load-clean-remove`. Generated exports
-can replace prior outputs, but source notebooks are preserved.
+The output is `build/analysis.ipynb`. Import-linked cells become their original
+ordinary import statements. Their project modules must remain importable in the
+recipient's environment. A cell with unsynchronized edits blocks export: run it
+and save first. Build does not read linked source files or certify their version,
+and an executed build uses the modules available in its fresh kernel.
 
-Recipients do not need load-clean for these cells. They still need third-party
-libraries, data files, and any modules imported by the bodies. Running ordinary
-Python can have side effects; export removes the synchronization action only.
+Explicit path links instead export their saved notebook bodies as ordinary Python.
+Neither form synchronizes source files during build/check. Tag the extension setup
+cell `load-clean-remove`. Generated exports may replace previous outputs; source
+notebooks are preserved. Other libraries, data files, and imported modules remain
+runtime dependencies. Ordinary Python can have side effects; export removes the
+synchronization operation only.
 
-For selected definitions from a larger module, the older explicit
-`%%load_clean inline` import-selection interface remains available. That is an
-export snapshot mechanism, not a linked function editor. See [usage](usage.md).
+Use explicit `%%load_clean inline` with a from-import when you need supported
+selected source and dependencies embedded in the notebook. This export mechanism
+is separate from editable links and has stricter dependency limits; see [usage](usage.md).
 
 ## Git and notebook pairing
 

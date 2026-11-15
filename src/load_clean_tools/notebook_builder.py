@@ -11,6 +11,8 @@ from typing import Any
 from load_clean.api import resolve_cell
 from load_clean.parser import parse_load_clean_cell
 from load_clean.linked import parse_header, validate
+from load_clean.linked import fingerprint
+from load_clean.import_link import import_node, parse_link_header
 
 
 def _dependency(name: str, extra: str = "tools") -> Any:
@@ -45,7 +47,19 @@ def resolve_cells(notebook: Any, *, source_roots: list[str | Path] | None = None
                 raise ValueError("Remove the file-loading command cell or tag it load-clean-remove before export; keep the generated linked cell")
             if first_line and first_line[0].strip().split(None, 1)[0:1] == ["%%load_clean"]:
                 header, _, body = cell.source.lstrip().partition('\n')
-                if parse_header(header.strip()[len('%%load_clean'):].strip()) is not None:
+                line = header.strip()[len('%%load_clean'):].strip()
+                imported = parse_link_header(line)
+                if imported is not None:
+                    statement, _, baseline = imported
+                    if fingerprint(body) != baseline:
+                        raise ValueError('Import-linked cell has unsynchronized edits; run it and save the notebook before export')
+                    cell.source = statement
+                    continue
+                if not line:
+                    import_node(body)
+                    cell.source = body.strip()
+                    continue
+                if parse_header(line) is not None:
                     # Export the saved notebook snapshot; never synchronize or
                     # access the linked file during a static check/build.
                     cell.source = validate(body)

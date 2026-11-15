@@ -12,7 +12,28 @@ From a source checkout, in the environment used by your notebook kernel:
 python -m pip install -e '.[notebook,tools]' ipykernel
 ```
 
-Run `%load_ext load_clean` once, then create a new linked file with:
+Run `%load_ext load_clean` once, then select the code using a normal import:
+
+```python
+%%load_clean
+from helpers import double
+```
+
+This runs the module and replaces the request with an editable linked definition.
+Use `import helpers` to link the entire module, or
+`from helpers import double as twice` for an alias. Multiple explicit selected
+names are supported. Module-relative imports and globals retain their package context.
+
+Keep the generated header (including `--base`) and edit/run normally. Cell-only
+edits save to the file; file-only edits refresh the cell and run the new source;
+different edits on both sides produce an error before writing or executing.
+Run your tests or calculations in separate cells, for example `double(21)`.
+
+Selected-definition edits preserve the rest of the file. Edit module-level imports
+and shared dependencies in the file, or link the whole module. Re-exports and
+ambiguous definitions are rejected rather than guessed.
+
+For a **new file**, the explicit path form remains available:
 
 ```python
 %%load_clean helpers.py
@@ -20,15 +41,9 @@ def double(value):
     return value * 2
 ```
 
-Or open an existing file with `%load_clean helpers.py`. It requests a new editable
-cell without executing the file. Remove or tag that one-time loader cell
-`load-clean-remove` before exporting. One cell owns the **complete file**, including
-imports; do not use a partial function copy to link an existing larger module.
-
-Keep the generated header (including `--base`) and edit/run normally. Cell-only
-edits save to the file; file-only edits refresh the cell and run the new source;
-different edits on both sides produce an error before writing or executing.
-Run your tests or calculations in separate cells, for example `double(21)`.
+Path links own the complete file and execute in the notebook namespace. To load
+an existing whole file without execution, use `%load_clean helpers.py`; remove or
+tag that one-time loader cell `load-clean-remove` before export.
 
 Cell insertion/replacement uses IPython editor requests, not a JupyterLab plugin.
 If your frontend ignores them, copy the displayed updated cell, including its
@@ -46,8 +61,10 @@ Tag the extension setup cell `load-clean-remove`, save `dev_analysis.ipynb`, the
 load-clean build --source dev_analysis.ipynb --output build --execute
 ```
 
-Linked cells export their saved notebook body as ordinary Python. Export does
-not sync files: run the linked cells and save the notebook first. The output is
+Import-linked cells export the original import, so the project must be installed
+or importable when the export runs. Unsynchronized cell edits block export. Path
+links export the notebook body as ordinary Python. Export does not sync files:
+run the linked cells and save the notebook first. The output is
 `build/analysis.ipynb`; source inputs are preserved, generated outputs replaced.
 
 The older import-selection interface remains available for selective embedding:
@@ -61,7 +78,7 @@ from example_helpers import greet
 
 | Mode | Result |
 | --- | --- |
-| `default` (or no mode) | Execute and preserve an ordinary import |
+| `default` (explicit) | Execute and preserve an ordinary import without linking |
 | `inline` | Embed selected definitions and supported static local dependencies |
 | `skeleton` | Create exercise stubs that raise `NotImplementedError` |
 

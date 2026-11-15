@@ -4,6 +4,16 @@ Created: 2026-11-14 · Revisited: 2026-11-14 · Revision: 3
 
 ## Current decision — 2026-11-15
 
+Follow-up correction: the primary interface must use Python imports, including
+`from module import name`, not require whole-file path links. Bare `%%load_clean`
+now creates an import-addressed link; explicit `default` retains ordinary-import
+behavior. A selected link owns only directly defined requested top-level spans
+and preserves unrelated file edits. Module context is retained during execution,
+including package-relative imports and globals. Whole-file path links remain a
+creation/fallback interface. This supersedes the first implementation's whole-file
+restriction described below. Re-exports and ambiguous source bindings are refused.
+Import-linked exports retain ordinary imports; selective embedding remains explicit.
+
 User feedback supersedes the one-way ownership transfer below: make run-triggered
 cell/file synchronization the primary workflow. Repeatedly switching load/save
 commands is unwanted. A linked cell contains one complete Python module and an

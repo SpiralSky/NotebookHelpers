@@ -5,6 +5,53 @@ For the complete experiment → module → Git → export journey, start with
 
 ## Linked cells: primary interface
 
+Load `%load_ext load_clean` once, then use a normal import:
+
+```python
+%%load_clean
+from my_project.helpers import double as twice
+```
+
+`import my_project.helpers as helpers` links the entire module. A `from` import
+links the selected top-level definitions; multiple explicit names are supported.
+On the first run, the source is loaded, an editable replacement cell is requested,
+and the complete module executes with its package context. The requested names
+are bound in the notebook with normal alias semantics. Subsequent runs synchronize
+first and re-execute the module snapshot, bypassing stale bytecode caches.
+Relative imports inside that module, `__file__`, and module globals work. Top-level
+effects run each time; dependencies imported by the module retain normal caching.
+Old external `from` bindings and previously computed results are not refreshed.
+
+The generated header carries `--import`, `--file`, and `--base`. Keep all three.
+The file is pinned and the baseline hashes only the selected source. Unrelated
+file edits can coexist with a selected-definition edit: the current file supplies
+the surrounding source and only selected spans are replaced. Different edits to
+the selected region conflict. AST is used to locate/validate spans, not regenerate
+the module. Unselected text and comments are preserved, including CRLF and BOM.
+
+Editable selections support directly defined top-level functions (including async
+and decorators), classes, and simple single-name assignments. Re-exports, conditional
+definitions, repeated bindings, wildcard imports, and definitions sharing a line
+are refused. Keep original definition names even when importing with aliases.
+Put comments inside the selected definitions; additional standalone comments or
+imports in a selected cell are rejected rather than silently discarded. Edit shared
+module imports/globals in the file or use a whole-module link. Renaming or adding
+definitions requires a whole-module link or a source-file edit.
+
+Source lookup uses standard filesystem module/package precedence without running
+package initializers. Custom meta-path import hooks, compiled modules and source
+inside archives are not editable links. If imports resolve elsewhere or a cached
+module points elsewhere, linking stops. Package initializers run as needed during
+execution, just as with imports. Runtime errors leave successful file syncs saved.
+
+Import-linked export emits the original import, not an isolated function body:
+this preserves dependency and package semantics. Export requires the cell body to
+match its baseline but does not inspect the source file, so it does not certify
+that file is unchanged. The project must be importable at runtime; use explicit
+`inline` mode for selective embedding. Neither check nor build syncs import links.
+
+## Explicit whole-file path links
+
 Load `%load_ext load_clean` once. `%load_clean path.py` reads a complete existing
 UTF-8 module and requests a new linked cell, without execution. Alternatively,
 `%%load_clean path.py` with a Python body creates a new file and executes it.
@@ -69,11 +116,11 @@ top-level effects run those effects on every linked-cell execution.
 
 ## Legacy import-selection modes
 
-For the older import-selection syntax, the cell magic accepts `default`, `inline`,
-and `skeleton`; omitting a header and providing an import retains its old behavior.
+For the older import-selection syntax, the cell magic accepts explicit `default`,
+`inline`, and `skeleton`. A bare header now creates an editable import link.
 
 ```python
-%%load_clean
+%%load_clean default
 from helpers import greet
 ```
 

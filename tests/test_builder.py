@@ -213,6 +213,26 @@ def test_link_loader_requires_removal_before_export(prefix):
     assert clean_notebook(Notebook([cell])).cells == []
 
 
+def test_import_link_exports_import_without_source_access(tmp_path):
+    from load_clean.import_link import ImportLink
+
+    body = 'def double(x):\n    return x * 2\n'
+    source = ImportLink('from unavailable import double', tmp_path / 'missing.py', body, body, '').cell
+    cell = Cell(cell_type='code', source=source, metadata={}, outputs=[], execution_count=None)
+    assert clean_notebook(Notebook([cell])).cells[0].source == 'from unavailable import double'
+    assert not (tmp_path / 'missing.py').exists()
+
+
+def test_unsynced_import_link_export_refused(tmp_path):
+    from load_clean.import_link import ImportLink
+
+    body = 'def double(x):\n    return x * 2\n'
+    source = ImportLink('from helpers import double', tmp_path / 'helpers.py', body, body, '').cell.replace('x * 2', 'x * 3')
+    cell = Cell(cell_type='code', source=source, metadata={})
+    with pytest.raises(ValueError, match='unsynchronized edits'):
+        clean_notebook(Notebook([cell]))
+
+
 @pytest.mark.skipif(nbformat is None, reason='nbformat not installed')
 def test_linked_export_executes_without_extension_or_source(tmp_path):
     pytest.importorskip('nbclient')

@@ -4,6 +4,21 @@ Updated: 2026-11-14. P3 baseline: `426802d` on `main`.
 
 ## Current state and next-session request
 
+Import-addressed follow-up: bare `%%load_clean` now accepts `import module` or
+`from module import name` to create editable module/selected-definition links.
+Generated headers preserve import identity, source path and selection baseline.
+Selected edits replace source spans without rewriting unrelated code; aliases,
+multiple names and package-relative imports are covered. Execution uses module
+context. Re-exports/ambiguous bindings are rejected. Explicit `default` retains
+the former bare-import behavior. Import-linked export preserves ordinary imports
+and rejects unsynced cell edits; project dependencies remain required. Path links
+remain available. This supersedes the whole-file limitation in the earlier entry.
+Verification: 145 tests passed without skips; isolated source/wheel build passed.
+A real kernel verified aliases, package-relative imports, selected saves preserving
+unrelated edits, conflict refusal, source refresh, whole-module binding, and an
+executed import-preserving export without source mutation. GUI replacement remains
+unverified; custom meta-path loaders and re-export editing are unsupported.
+
 2026-11-15: sync-on-run is now the primary workflow. `%%load_clean path.py`
 synchronizes and executes a whole module; `%load_clean path.py` loads an existing
 file into a new linked cell without execution. A persisted `--base` hash selects

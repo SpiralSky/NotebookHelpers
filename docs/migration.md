@@ -2,13 +2,19 @@
 
 ## Sync-on-run workflow
 
-The primary interface is now `%%load_clean path.py` with the complete module body,
-or `%load_clean path.py` to open an existing module without execution. Keep the
-generated `--base` header. Each Run synchronizes the changed side; conflicting
-edits error before writing or executing. See [linked-cell semantics](usage.md#linked-cells-primary-interface).
-The previous import-selection and creation-only save commands remain compatible.
-Do not convert a selected function cell into a whole-file link over a larger module;
-load the complete module first. No frontend plugin or background watcher is installed.
+The primary interface is now a bare `%%load_clean` with `import module` or
+`from module import name`. The first run loads an editable whole-module or
+selected-definition link and executes in module context. Keep the generated
+`--import`, `--file` and `--base` header. Each Run synchronizes the changed side;
+conflicting edits to the selected source error before writing or executing.
+See [linked-cell semantics](usage.md#linked-cells-primary-interface).
+
+Bare imports previously performed an ordinary import without creating a link.
+Use explicit `%%load_clean default` to retain that behavior. `inline`, `skeleton`,
+creation-only save, and whole-file path links remain available. Import links
+export the original import and require the project at runtime; they do not export
+isolated selected bodies without their dependencies. No frontend plugin or
+background watcher is installed.
 
 ## Earlier compatibility changes
 
