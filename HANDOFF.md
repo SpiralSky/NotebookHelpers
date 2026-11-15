@@ -4,6 +4,12 @@ Updated: 2026-11-15. Historical P3 baseline: `426802d` on `main`.
 
 ## Current state and next-session request
 
+Release follow-up: package version is 0.0.4 for the import-body/silent-sync fix,
+with matching `v0.0.4` tag. Isolated sdist/wheel builds passed; a fresh core-only
+wheel installation outside the checkout verified version metadata, both CLI
+entry points, core imports and the new import-link cell layout. The underlying
+change's full suite passed (186 tests); GitHub tag CI gates release assets.
+
 Import layout and output follow-up: generated `%%load_clean` cells now retain
 the identifying Python import below the magic, followed by a blank separator and
 editable source. Headers retain `--file` and `--base` for guarded synchronization.
