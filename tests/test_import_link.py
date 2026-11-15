@@ -26,7 +26,7 @@ def sync_edit(link, source):
 
 def test_selected_import_executes_with_package_dependencies_and_alias(module):
     link = synchronize('from linked_project.helpers import double as twice')
-    assert link.source.startswith('def double(')
+    assert link.source.startswith('from .utilities import FACTOR\n')
     assert 'other' not in link.source and 'FACTOR = ' not in link.source
     namespace = {}
     execute(link, namespace)
@@ -172,7 +172,6 @@ def test_unsafe_selection_refused(module, source):
 
 
 @pytest.mark.parametrize('edit', [
-    'import math\ndef double(x):\n    return x\n',
     'def renamed(x):\n    return x\n',
     '# unattached comment\ndef double(x):\n    return x\n',
     'def double(',
@@ -203,3 +202,70 @@ def test_selection_preserves_crlf_and_bom(module):
 def test_ambiguous_imports_refused(module, statement):
     with pytest.raises(ValueError):
         synchronize(statement)
+
+
+def test_selected_imports_can_be_added_changed_and_removed(module):
+    link = synchronize('from linked_project.helpers import double')
+    local = link.source.replace('from .utilities import FACTOR', 'import math').replace('x * FACTOR', 'math.sqrt(x)')
+    saved = sync_edit(link, local)
+    namespace = {}
+    execute(saved, namespace)
+    assert namespace['double'](9) == 3
+    assert '# unrelated code\ndef other()' in module.read_text()
+    saved = sync_edit(saved, saved.source.replace('import math\n\n', '').replace('math.sqrt(x)', 'x'))
+    assert 'import math' not in module.read_text()
+    saved = sync_edit(saved, 'import math\n\n' + saved.source)
+    assert 'import math' in module.read_text()
+
+
+def test_import_changes_conflict_before_writing(module):
+    link = synchronize('from linked_project.helpers import double')
+    remote = module.read_text().replace('from .utilities import FACTOR', 'from .utilities import FACTOR as scale')
+    module.write_text(remote)
+    with pytest.raises(ValueError, match='Sync conflict'):
+        sync_edit(link, link.source.replace('x * FACTOR', 'x * FACTOR + 1'))
+    assert module.read_text() == remote
+
+
+def test_unchanged_legacy_selection_refreshes_with_imports(module):
+    from load_clean.import_link import selection
+    old = selection(module.read_text(), ['double'], include_imports=False)
+    refreshed = synchronize('from linked_project.helpers import double', old, fingerprint(old))
+    assert refreshed.source.startswith('from .utilities import FACTOR')
+
+
+def test_new_import_preserves_docstring_and_future_order(module):
+    module.write_text('"""Module docs."""\nfrom __future__ import annotations\n\ndef double(x): return x * 2\n')
+    link = synchronize('from linked_project.helpers import double')
+    saved = sync_edit(link, link.source.replace('from __future__ import annotations', 'from __future__ import annotations\nimport math'))
+    assert saved.module_source.startswith('"""Module docs."""\nfrom __future__ import annotations\nimport math')
+
+
+def test_imports_sharing_lines_refused(module):
+    module.write_text('import math; UNRELATED = 3\ndef double(x): return math.sqrt(x)\n')
+    with pytest.raises(ValueError, match='sharing a line'):
+        synchronize('from linked_project.helpers import double')
+
+
+def test_edited_legacy_selection_refuses_untracked_import_changes(module):
+    from load_clean.import_link import selection
+    old = selection(module.read_text(), ['double'], include_imports=False)
+    before = module.read_bytes()
+    with pytest.raises(ValueError, match='Sync conflict'):
+        synchronize('from linked_project.helpers import double', old.replace('x * FACTOR', 'x * FACTOR + 1'), fingerprint(old))
+    assert module.read_bytes() == before
+
+
+def test_new_import_in_module_without_imports_preserves_docstring(module):
+    module.write_text('"""Module documentation."""\n\ndef double(x): return x * 2\n')
+    link = synchronize('from linked_project.helpers import double')
+    result = sync_edit(link, 'import math\n\n' + link.source)
+    assert result.module_source.startswith('"""Module documentation."""\nimport math\n')
+    assert 'def double' in result.module_source
+
+
+def test_new_import_preserves_preamble_and_decorator(module):
+    module.write_text('#!/usr/bin/env python\n# preamble\n@staticmethod\ndef double(x): return x * 2\n')
+    link = synchronize('from linked_project.helpers import double')
+    result = sync_edit(link, 'import math\n\n' + link.source)
+    assert result.module_source.startswith('#!/usr/bin/env python\n# preamble\nimport math\n@staticmethod\n')

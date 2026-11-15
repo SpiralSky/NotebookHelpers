@@ -1,7 +1,7 @@
 from __future__ import annotations
 import ast
 from .models import LoadCleanCell
-VALID_MODES = {'default', 'inline', 'skeleton'}
+VALID_MODES = {'copy', 'skeleton', 'default', 'inline'}
 
 def parse_import(line):
     try:
@@ -32,6 +32,8 @@ def parse_load_clean_cell(source):
         return None
     lines = source.lstrip().splitlines()
     header = lines[0].strip()[len('%%load_clean'):].strip()
+    include_imports = '--include-imports' in header.split()
+    header = header.replace('--include-imports', '') if include_imports else header
     parts = header.split(None, 1)
     mode = parts.pop(0) if parts and parts[0] in VALID_MODES else 'default'
     body = '\n'.join(lines[1:])
@@ -50,4 +52,4 @@ def parse_load_clean_cell(source):
         if not isinstance(node, ast.Expr) or not isinstance(node.value, ast.List) or any(not isinstance(x, ast.Name) for x in node.value.elts):
             raise ValueError('Only an import and optional symbol list are allowed; materialize generated code before editing')
         names.extend(x.id for x in node.value.elts)
-    return LoadCleanCell(mode, import_line, names)
+    return LoadCleanCell(mode, import_line, names, include_imports)

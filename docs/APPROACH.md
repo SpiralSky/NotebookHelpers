@@ -6,10 +6,21 @@ Created: 2026-11-14 · Revisited: 2026-11-14 · Revision: 3
 
 Post-release review: v0.0.5 is published. Keep the core/tooling split and separate
 pure import-link syntax from synchronization/execution. The user authorized
-`# noqa: F401` on generated identifying imports and import-linked exports to
-protect intentionally unused bindings; other user-facing changes need approval.
-Mode simplification, primary-link status/version diagnostics, and runnable sync
-onboarding are recommendations, not accepted work.
+`# noqa: F401` on identifying imports, then approved all three follow-ups:
+copy/skeleton materialization, primary sync status/version diagnostics, and a
+runnable example in `examples/`. Subsequent feedback requests `--include-imports`
+for copying (imports excluded by default) and mandates visible editable imports
+for sync. These approvals supersede the earlier pending decisions.
+
+The bounded follow-up retains explicit default, legacy inline execution and path
+interfaces. Copy/skeleton replace the cell without execution and include supported
+dependency imports only when requested. Selected sync links own selected definitions
+plus all top-level imports; imports are shared across selections and participate
+in conflicts. Unchanged old links refresh; edited old links can conflict safely
+because their baselines did not track imports. Other globals/conditional import
+blocks remain module context. Status reads source without execution or writes;
+doctor identifies distribution version and source paths. `examples/dev_sync.ipynb`
+adds the runnable workflow alongside the unchanged export example.
 
 Review method: compare the complete run/edit/refresh/export journey and user
 feedback, rather than infer frontend reliability from kernel tests. This follows

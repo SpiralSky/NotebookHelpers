@@ -44,21 +44,29 @@ edits save to the file; file-only edits refresh the cell and run the new source;
 different edits on both sides produce an error before writing or executing.
 Run your tests or calculations in separate cells, for example `double(21)`.
 
-Selected-definition edits preserve the rest of the file. Edit module-level imports
-and shared dependencies in the file, or link the whole module. Re-exports and
-ambiguous definitions are rejected rather than guessed.
+Selected sync cells always show the module’s top-level imports, so you can add,
+edit or remove dependencies directly in the cell. Imports are shared by all
+selections from that module and participate in conflict detection. Unselected
+definitions and surrounding source are preserved. Edit other shared globals in
+the file, or link the whole module. Re-exports and ambiguous definitions are refused.
 
-For a **new file**, the explicit path form remains available:
+For a runnable walkthrough, open [examples/dev_sync.ipynb](examples/dev_sync.ipynb).
+It covers sync, file refresh, conflict recovery, copy/skeleton, and export;
+run it in a disposable copy of `examples/` to experiment freely.
+
+For independent editable code, use:
 
 ```python
-%%load_clean helpers.py
-def double(value):
-    return value * 2
+%%load_clean copy --include-imports
+from example_helpers import greet
 ```
 
-Path links own the complete file and execute in the notebook namespace. To load
-an existing whole file without execution, use `%load_clean helpers.py`; remove or
-tag that one-time loader cell `load-clean-remove` before export.
+`copy` replaces the cell with ordinary Python without executing it. Run the
+replacement to test it. `skeleton` does the same with callable bodies replaced by
+`raise NotImplementedError`. Both exclude dependency imports by default; add
+`--include-imports` to retain supported imports needed by the selection. Supply
+missing imports yourself before running a copy. These cells have no sync link.
+Sync always includes imports; its optional `--include-imports` is redundant.
 
 Cell insertion/replacement uses IPython editor requests, not a JupyterLab plugin.
 Successful load/sync operations produce no status messages or source displays;
@@ -117,7 +125,7 @@ tags, metadata, execution settings and reporting have separate controls. Run
 Removing imports or stripping a selected-definition header does not automatically
 supply that code's dependencies.
 
-The older import-selection interface remains available for selective embedding:
+Compatibility forms remain available:
 
 Load `%load_ext load_clean` once in your notebook, then run:
 
@@ -129,11 +137,14 @@ from example_helpers import greet
 | Mode | Result |
 | --- | --- |
 | `default` (explicit) | Execute and preserve an ordinary import without linking |
-| `inline` | Embed selected definitions and supported static local dependencies |
-| `skeleton` | Create exercise stubs that raise `NotImplementedError` |
+| `copy` | Insert independent definitions without execution; imports opt-in |
+| `inline` (legacy) | Execute embedded definitions and supported dependencies, retaining imports |
+| `skeleton` | Insert independent exercise stubs without execution; imports opt-in |
 
-These legacy import-selection forms accept imports and an optional final selection
-list. Path-based linked cells accept a complete Python module instead.
+These import-selection forms accept imports and an optional final selection
+list. For creation/fallback, `%%load_clean path.py` creates or syncs a whole module;
+`%load_clean path.py` loads an existing file without execution. Path cells execute
+in the notebook namespace; import links retain module/package context.
 Selective embedding does not vendor every dependency and rejects
 unsupported constructs. Use ordinary imports when embedding is unnecessary.
 

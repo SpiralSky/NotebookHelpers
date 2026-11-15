@@ -52,7 +52,8 @@ magnitude(5, 12)
 ```
 
 Selected cells may edit directly defined functions, classes, or simple assignments.
-Keep the selected names intact; edit module-level imports and other shared dependencies
+Keep the selected names intact. Top-level imports are shown and editable in sync
+cells; they are shared across selections and included in conflict checks. Edit other shared dependencies
 in the source file or a whole-module link. Re-exports and ambiguous definitions
 raise errors instead of guessing a write target. See [limits](usage.md).
 
@@ -125,7 +126,7 @@ notebooks are preserved. Other libraries, data files, and imported modules remai
 runtime dependencies. Ordinary Python can have side effects; export removes the
 synchronization operation only.
 
-Use explicit `%%load_clean inline` with a from-import when you need supported
+Use `%%load_clean copy --include-imports` with a from-import when you need supported
 selected source and dependencies embedded in the notebook. This export mechanism
 is separate from editable links and has stricter dependency limits; see [usage](usage.md).
 

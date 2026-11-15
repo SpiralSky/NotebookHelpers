@@ -58,3 +58,18 @@ of the source implementation.
 
 Pre-1.0 interfaces may change. Pin the exact version for reproducible workflows
 and inspect generated notebook changes when upgrading.
+
+
+## Copy, skeleton and editable sync imports
+
+`copy` inserts independent ordinary Python without executing it. `skeleton` now
+also replaces the request without execution. Run the replacement separately.
+Both exclude dependency imports by default; add `--include-imports` to retain
+supported imports. Legacy `inline` retains immediate execution and imports.
+Sync cells always include top-level imports, including selected-definition links.
+Imports are shared module state and now participate in conflict detection.
+
+Unchanged saved selected links from older releases refresh to include imports.
+An edited older link may conflict because its baseline did not track imports:
+preserve its edits, load a fresh link, and transfer them manually. Static export
+of saved older links remains supported and never synchronizes files.

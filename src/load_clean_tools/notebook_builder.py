@@ -117,7 +117,7 @@ def resolve_cells(notebook: Any, *, source_roots: list[str | Path] | None = None
                         raise ValueError('Import-linked cell has unsynchronized edits; run it and save the notebook before export')
                     cell.source = protected_import(statement)
                     continue
-                if not line:
+                if line in {'', '--include-imports'}:
                     cell.source = protected_import(body)
                     continue
                 if parse_header(line) is not None:
@@ -127,7 +127,8 @@ def resolve_cells(notebook: Any, *, source_roots: list[str | Path] | None = None
                     continue
             parsed = parse_load_clean_cell(cell.source)
             if parsed:
-                cell.source = resolve_cell(parsed.import_line, parsed.names, parsed.mode, source_roots=source_roots)
+                cell.source = resolve_cell(parsed.import_line, parsed.names, parsed.mode, source_roots=source_roots,
+                                           include_imports=True if parsed.include_imports else None)
         except Exception as exc:
             raise ValueError(f"Cell {index}: {exc}. For unsupported embedding, keep an ordinary import in default mode and install the helper in the runtime environment.") from exc
     return notebook

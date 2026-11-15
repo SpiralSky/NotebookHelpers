@@ -4,67 +4,58 @@ Updated: 2026-11-15.
 
 ## Current state and next-session request
 
-`v0.0.5` at `9be43eb` is published on origin with wheel and source assets;
-its Python 3.10–3.14 CI and release workflow passed. This release includes
-comment-based source baselines and unpinned import destinations.
+`v0.0.5` at `9be43eb` remains the latest release. Follow-up `de94bde`
+separated pure import-link syntax and protected identifying imports with noqa.
+The resumed session recovered subsequent user approvals from the previous
+session transcript; the old handoff’s pending-approval list was stale.
 
-The post-release follow-up separates pure import-link syntax into
-`src/load_clean/_import_link_format.py`, shared by IPython and static export.
-`import_link.py` retains compatibility imports of its earlier syntax helpers.
-The existing core/tooling package split remains useful; no package renames.
+Completed the approved follow-up:
 
-User specifically authorized protecting required imports before the next release.
-Generated identifying imports and import-linked exports now carry `# noqa: F401`.
-PyCharm documents noqa support; real Flake8 and Ruff checks confirmed that the
-marker suppresses F401 and prevents Ruff from removing the import. The unmarked
-control was removed. This is not a universal guarantee for every organizer;
-explicit export policies such as `--imports remove-cells` still apply. README
-and usage edits are limited to this authorized marker behavior.
+- `copy` inserts independent Python without executing it; `skeleton` also
+  materializes without execution. Both omit dependency imports by default;
+  `--include-imports` retains supported imports. Legacy `inline` still executes
+  immediately with imports, and explicit `default`/path forms remain compatible.
+- Sync always includes top-level module imports, editable alongside selected
+  definitions. Shared imports participate in conflict detection; unselected
+  definitions and surrounding text are preserved. Other globals/conditional
+  blocks remain file context. Changed imports group at the first existing import;
+  first imports preserve module docstrings, preambles and decorators.
+- Status includes selected/whole-module/path sync links without executing or
+  writing. Doctor shows distribution version, module/CLI paths and dependencies.
+- `examples/dev_sync.ipynb` and `examples/sync_helpers.py` demonstrate the workflow;
+  the existing export example remains unchanged. Guidance emphasizes sync/copy/
+  skeleton while documenting compatibility syntax.
 
-The user primarily uses PyCharm and permitted verifying another frontend.
-Actual JupyterLab 4.6.6 UI checks in headless Brave verified visible cell
-replacement, notebook edits saved to the module, file edits refreshed into the
-cell, updated execution results, no successful-sync output, and conflict refusal
-without file writes or execution of conflicting edits. PyCharm UI remains
-unverified. Kernel requests still do not acknowledge frontend application.
+No new release/tag requested in this resumed unit. Future work should follow
+concrete user feedback; do not infer authorization for unrelated interfaces.
 
-Verification: 192 tests passed without skips; isolated sdist/wheel builds passed;
-a core-only installed wheel outside the checkout verified parser compatibility,
-reference comments, protected imports and optional-dependency separation.
-Temporary browser/server/environment artifacts are removed after verification.
-No human usability measurements were made.
+## Verification and limits
 
-## Decisions awaiting approval
+All 210 tests passed without skips; isolated sdist/wheel builds and core-only
+installed-wheel checks outside the checkout passed. Results are recorded in
+`docs/approach-log.tsv`. Both documented
+example check/build commands and raw sync notebook execution passed in a disposable
+copy; inputs stayed unchanged. Kernel checks verify replacement requests, not
+visible frontend application. The earlier JupyterLab 4.6.6 UI check passed;
+PyCharm UI and human usefulness remain unverified.
 
-The user requires approval before further user-facing changes. Do not treat
-previous conversational proposals as approved. In particular:
-
-- Simplify the public workflow to sync/copy/skeleton: rename inline to copy,
-  visibly materialize independent code for copy/skeleton, and keep default/path
-  forms compatible while removing them from the primary documentation.
-- Extend status to primary sync links and doctor to package version/module path.
-  Status currently records only default/inline/skeleton loads.
-- Add a runnable sync example and task-based onboarding; the checked-in example
-  currently demonstrates inline export. Preserve the existing export example.
-
-The import-retention marker is already explicitly approved. No other interface,
-mode, output or onboarding changes were made during this review.
+Old saved selected links refresh with imports when unchanged. Edited older links
+may conflict because their digest excluded imports: preserve edits, load a fresh
+link and transfer edits manually. Static export of saved old links remains valid.
 
 ## Contracts and verification commands
 
-- Import links: bare magic, identifying import, separate source-hash comment,
-  then editable source. The hash is not a Git commit and persists in saved cells.
-- Selected edits preserve unselected module source. Both sides changing the
-  selected source differently causes a conflict before writing or executing.
-- Import-linked execution retains module/package context; path links execute in
-  the notebook namespace. Runtime errors do not undo successful synchronization.
-- Static check/build never synchronize source files. Import links export imports;
-  path links export the saved notebook body. Legacy argument layouts remain read.
-- Standard full suite:
-  `PYTHONPATH=src IPYTHONDIR=/tmp/load-clean-ipython python -m pytest -q`.
-  Notebook execution needs local kernel sockets and writable Jupyter data.
+- Import links retain an identifying import plus separate source hash comment.
+  The hash survives notebook saving/restarts and is not a Git commit.
+- Sync conflicts stop before writes/execution. Writes validate syntax, recheck
+  bytes and publish atomically; runtime errors leave completed syncs saved.
+- Selected execution retains module/package context; path execution uses the
+  notebook namespace. Run dependent calculations again after syncing.
+- Build/check never sync source files. Import links export protected imports;
+  path links export saved Python; copy/skeleton requests resolve statically.
+- Full suite: `PYTHONPATH=src IPYTHONDIR=/tmp/load-clean-ipython python -m pytest -q`.
+  Notebook execution requires optional dev dependencies and local kernel sockets.
 - Release tags must match `project.version`; never move published tags.
 
-Read `docs/APPROACH.md` for the work protocol and existing design constraints.
-Historical implementation details remain in Git and the append-only
-`docs/approach-log.tsv`; completed unit briefs are no longer an active backlog.
+Read `docs/APPROACH.md` before choosing work. The append-only approach log
+records technical evidence separately from unmeasured human benefit.

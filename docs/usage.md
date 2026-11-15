@@ -46,9 +46,9 @@ links no longer pin an absolute file path. Existing source/cache checks still
 require a kernel restart if a cached module points elsewhere.
 Older `--import` and `--file`/`--base` layouts remain readable and convert on Run.
 Successful loading/syncing adds no cell output; prints and displays from your
-module code still appear. The baseline hashes only the selected source. Unrelated
+module code still appear. The baseline hashes the selected definitions and all top-level imports. Unrelated
 file edits can coexist with a selected-definition edit: the current file supplies
-the surrounding source and only selected spans are replaced. Different edits to
+the surrounding source and only selected spans and edited top-level imports are replaced. Different edits to
 the selected region conflict. AST is used to locate/validate spans, not regenerate
 the module. Unselected text and comments are preserved, including CRLF and BOM.
 
@@ -56,9 +56,14 @@ Editable selections support directly defined top-level functions (including asyn
 and decorators), classes, and simple single-name assignments. Re-exports, conditional
 definitions, repeated bindings, wildcard imports, and definitions sharing a line
 are refused. Keep original definition names even when importing with aliases.
-Put comments inside the selected definitions; additional standalone comments or
-imports in a selected cell are rejected rather than silently discarded. Edit shared
-module imports/globals in the file or use a whole-module link. Renaming or adding
+Top-level imports are always included and editable, including relative imports.
+They are shared across selections and participate in conflict detection. Imports
+inside conditional blocks remain file context; use a whole-module link to edit
+those blocks. Put new comments inside definitions or on import lines; unattached
+comments are refused. Edit other shared globals in the file or use a whole-module
+link. Changed imports are grouped at the first original import position; unchanged
+imports keep their original positions. Imports sharing a line with other statements
+are refused for selected links. Renaming or adding
 definitions requires a whole-module link or a source-file edit.
 
 Source lookup uses standard filesystem module/package precedence without running
@@ -71,7 +76,7 @@ Import-linked export emits the original import, not an isolated function body:
 this preserves dependency and package semantics. Export requires the cell body to
 match its baseline but does not inspect the source file, so it does not certify
 that file is unchanged. The project must be importable at runtime; use explicit
-`inline` mode for selective embedding. Neither check nor build syncs import links.
+`copy --include-imports` for selective embedding. Neither check nor build syncs import links.
 
 ## Explicit whole-file path links
 
@@ -138,50 +143,55 @@ depending on package-relative imports, module `__file__`, or package initializat
 may require adaptation; use ordinary imports for such modules. Modules with
 top-level effects run those effects on every linked-cell execution.
 
-## Legacy import-selection modes
+## Copy and skeleton
 
-For the older import-selection syntax, the cell magic accepts explicit `default`,
-`inline`, and `skeleton`. A bare header now creates an editable import link.
-
-```python
-%%load_clean default
-from helpers import greet
-```
-
-Default mode executes the import and exports the import statement. Inline mode
-embeds Python definitions instead:
+Use these to replace the current cell with independent Python, without executing
+or writing a source file:
 
 ```python
-%%load_clean inline
+%%load_clean copy --include-imports
 from helpers import greet
 [greet]
 ```
 
-Use explicit `from module import symbol` imports for embedding. Wildcard imports
+`copy` inserts selected definitions and supported static local dependencies.
+`skeleton` uses the same selection but replaces callable bodies with
+`raise NotImplementedError`. Run the replacement cell separately. Both omit
+dependency import statements by default; `--include-imports` retains supported
+imports needed by the selection. Without them, supply the required bindings before
+running generated code (including imports used in annotations and decorators).
+Relative/wildcard dependency imports and dynamic dependency lookup cannot be
+embedded. Sync cells always include module imports; their optional
+`--include-imports` flag has no additional effect.
+
+Use explicit `from module import symbol` imports for copying. Wildcard imports
 require an explicit final selection list, such as `[greet]`. The optional list
-selects definitions; the cell body is not a general-purpose Python program.
+selects definitions; this request body is not a general-purpose Python program.
+Static export resolves copy/skeleton requests into the same ordinary Python.
 
-Skeleton mode uses the same selection syntax but replaces callable bodies with
-`raise NotImplementedError`. Use it for exercises and interface illustrations.
-
-Inspect a selection before loading it:
+The compatibility mode `inline` still embeds and executes immediately, retaining
+its imports. Explicit `default` still executes and exports an ordinary import.
+A bare header creates a sync link. Existing path syntax remains available as a
+whole-module creation/fallback interface.
 
 ```python
-%load_clean_preview inline from helpers import greet
-%load_clean_check inline from helpers import greet
-%load_clean_materialize inline from helpers import greet
+%load_clean_preview copy --include-imports from helpers import greet
+%load_clean_check copy --include-imports from helpers import greet
+%load_clean_materialize copy --include-imports from helpers import greet
 %load_clean_status
 ```
 
-Preview renders the resolved source without executing the import or source.
-Check validates a selection and reports its source SHA-256 without loading it.
-Materialize places generated ordinary Python in a new input cell without
-executing it. Status reports recorded hashes and whether source changed since
-the last successful load; check without arguments also displays status. Line
-commands select names through explicit from-imports and do not accept a final
-selection list.
-These operations do not prove that generated code is safe or semantically
-identical under every runtime environment.
+Preview prints source, check validates without execution, and materialize inserts
+a new ordinary Python cell without execution. Status reports legacy loads, copies,
+and primary import/path sync links without executing or writing source. Selected
+sync status compares the definitions and top-level imports; whole-module status
+compares the complete source. Import destinations are resolved again and changed
+paths are reported. Missing/unresolvable sources appear as unavailable. Status
+cannot inspect unrun notebook edits or certify downstream results are current.
+Check without arguments also displays status. Line commands do not accept a final
+selection list. `load-clean doctor` reports installed distribution version, module
+and CLI paths, Python executable, search paths and optional dependencies; missing
+distribution metadata is reported explicitly for source checkouts.
 
 ## Save a prototype as a module
 

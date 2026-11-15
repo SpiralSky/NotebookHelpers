@@ -60,6 +60,8 @@ def parse_link_header(line: str) -> tuple[str, str, str] | None:
 
 def parse_link_cell(line: str, cell: str | None) -> tuple[str, str | None, str, str] | None:
     """Read comment-based links and earlier argument layouts without file access."""
+    if line.strip() == '--include-imports':
+        line = ''  # Sync always includes imports.
     legacy = parse_link_header(line)
     if legacy is not None:
         if cell is None:

@@ -81,3 +81,21 @@ def test_explicit_source_roots_are_exclusive_and_static(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match='--source-root'):
         resolve_cell('from only_elsewhere import f', [], 'inline', source_roots=[root])
     assert sys.path == before and 'selection' not in sys.modules
+
+
+@pytest.mark.parametrize('mode', ['copy', 'skeleton'])
+def test_copy_import_policy(module, mode):
+    source = resolve_cell(f'from {module} import f', [], mode)
+    assert 'import math' not in source
+    included = resolve_cell(f'from {module} import f', [], mode, include_imports=True)
+    assert 'import math' in included
+    if mode == 'copy':
+        namespace = {}
+        exec(included, namespace)
+        assert namespace['f'](4) == 9
+
+
+@pytest.mark.parametrize('header', ['copy --include-imports', '--include-imports copy'])
+def test_include_imports_parser(header):
+    parsed = parse_load_clean_cell(f'%%load_clean {header}\nfrom example import f')
+    assert parsed.mode == 'copy' and parsed.include_imports

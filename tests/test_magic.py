@@ -225,3 +225,38 @@ def test_legacy_import_header_migrates_silently(shell, tmp_path, monkeypatch, ca
     assert calls[-1].split('\n', 1)[0] == '%%load_clean'
     assert calls[-1].splitlines()[2].startswith('# Referenced Source: sha256:')
     assert capsys.readouterr().out == ''
+
+
+@pytest.mark.parametrize('mode', ['copy', 'skeleton'])
+def test_copy_and_skeleton_replace_without_execution(shell, monkeypatch, mode):
+    calls = []
+    monkeypatch.setattr(shell, 'set_next_input', lambda source, replace: calls.append((source, replace)))
+    shell.run_cell_magic('load_clean', mode, 'from magic_example import answer')
+    assert calls[0][1] is True and 'def answer' in calls[0][0]
+    assert 'answer' not in shell.user_ns
+    assert ('NotImplementedError' in calls[0][0]) == (mode == 'skeleton')
+
+
+def test_sync_status_tracks_selected_imports_without_writing(shell, tmp_path, capsys):
+    calls = []
+    shell.set_next_input = lambda source, replace: calls.append(source)
+    shell.run_cell_magic('load_clean', '--include-imports', 'from magic_example import answer')
+    shell.run_line_magic('load_clean_status', '')
+    assert '[sync]: unchanged' in capsys.readouterr().out
+    path = tmp_path / 'magic_example.py'
+    path.write_text('import math\n' + path.read_text())
+    before = path.read_bytes()
+    shell.run_line_magic('load_clean_status', '')
+    assert '[sync]: changed' in capsys.readouterr().out
+    assert path.read_bytes() == before
+
+
+def test_copy_import_flag_reaches_magic(shell, tmp_path, monkeypatch):
+    path = tmp_path / 'magic_example.py'
+    path.write_text('import math\ndef answer(): return math.sqrt(9)\n')
+    calls = []
+    monkeypatch.setattr(shell, 'set_next_input', lambda source, replace: calls.append(source))
+    shell.run_cell_magic('load_clean', 'copy', 'from magic_example import answer')
+    shell.run_cell_magic('load_clean', 'copy --include-imports', 'from magic_example import answer')
+    assert 'import math' not in calls[0] and 'import math' in calls[1]
+    assert 'answer' not in shell.user_ns

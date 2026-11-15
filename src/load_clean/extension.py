@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import ast
 import hashlib
 import shlex
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -11,13 +13,34 @@ from IPython.core.magic import Magics, cell_magic, line_cell_magic, line_magic, 
 from .api import resolve_cell, save_cell
 from .parser import parse_import, parse_load_clean_cell
 from .resolver import resolve_module
-from .linked import load_link, parse_header, sync_link
+from .linked import fingerprint, load_link, parse_header, sync_link
 from ._import_link_format import parse_link_cell
-from .import_link import synchronize, execute as execute_import_link
+from .import_link import (
+    import_node, module_path, selection, synchronize, execute as execute_import_link,
+)
 
 
 def _fingerprint(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+@dataclass(frozen=True)
+class _LinkedStatus:
+    path: Path
+    baseline: str
+    statement: str | None = None
+
+    def current(self) -> tuple[Path, str]:
+        """Read the current linked region without syncing or executing it."""
+        path = self.path
+        node = None
+        if self.statement is not None:
+            node, module = import_node(self.statement)
+            path = module_path(module)
+        source = path.read_bytes().decode('utf-8-sig')
+        if isinstance(node, ast.ImportFrom):
+            source = selection(source, [alias.name for alias in node.names])
+        return path, fingerprint(source)
 
 
 @magics_class
@@ -27,6 +50,7 @@ class LoadCleanMagics(Magics):
     def __init__(self, shell: Any) -> None:
         super().__init__(shell)
         self.sources: dict[str, tuple[Path, str]] = {}
+        self.links: dict[str, _LinkedStatus] = {}
 
     @staticmethod
     def _parse(line: str, cell: str = ""):
@@ -43,7 +67,8 @@ class LoadCleanMagics(Magics):
         try:
             module, _, _, _ = parse_import(parsed.import_line)
             path = resolve_module(module)
-            source = resolve_cell(parsed.import_line, parsed.names, parsed.mode)
+            source = resolve_cell(parsed.import_line, parsed.names, parsed.mode,
+                                  include_imports=True if parsed.include_imports else None)
             return module, path, source
         except (ValueError, SyntaxError, ImportError, OSError) as exc:
             raise UsageError(str(exc)) from exc
@@ -57,9 +82,12 @@ class LoadCleanMagics(Magics):
             if import_header is not None:
                 statement, path, baseline, source = import_header
                 imported = synchronize(statement, source, baseline, path)
-            elif cell is not None and not line.strip():
+            elif cell is not None and line.strip() in {'', '--include-imports'}:
                 imported = synchronize(cell)
             if imported is not None:
+                self.links[imported.statement] = _LinkedStatus(
+                    imported.path, fingerprint(imported.source), imported.statement,
+                )
                 self.shell.set_next_input(imported.cell, replace=True)
         except (ValueError, SyntaxError, OSError) as exc:
             raise UsageError(str(exc)) from exc
@@ -72,10 +100,12 @@ class LoadCleanMagics(Magics):
                 if linked is None or linked[1] is not None:
                     raise ValueError('Usage: %load_clean path.py (load without execution)')
                 result = load_link(linked[0])
+                self.links[str(result.path)] = _LinkedStatus(result.path, fingerprint(result.source))
                 self.shell.set_next_input(result.cell, replace=False)
                 return
             if linked is not None:
                 result = sync_link(linked[0], cell, linked[1])
+                self.links[str(result.path)] = _LinkedStatus(result.path, fingerprint(result.source))
                 self.shell.set_next_input(result.cell, replace=True)
         except (ValueError, SyntaxError, OSError) as exc:
             raise UsageError(str(exc)) from exc
@@ -100,6 +130,10 @@ class LoadCleanMagics(Magics):
         module, path, source = self._source(parsed)
         if not source.strip():
             raise UsageError(f"No definitions found in {module}")
+        if parsed.mode in {'copy', 'skeleton'}:
+            self.shell.set_next_input(source, replace=True)
+            self.sources[module] = (path, _fingerprint(path))
+            return
         exec(compile(source, str(path), "exec"), self.shell.user_ns)
         self.sources[module] = (path, _fingerprint(path))
 
@@ -141,7 +175,7 @@ class LoadCleanMagics(Magics):
         """Show recorded source fingerprints and whether files have changed."""
         if line.strip():
             raise UsageError("%load_clean_status takes no arguments")
-        if not self.sources:
+        if not self.sources and not self.links:
             print("No load_clean sources recorded")
             return
         for module, (path, fingerprint) in sorted(self.sources.items()):
@@ -152,8 +186,20 @@ class LoadCleanMagics(Magics):
                 state = "unavailable"
             print(f"{module}: {state} sha256:{fingerprint} ({path})")
 
-        print("Status compares on-disk source with the last load; it cannot certify downstream results are fresh. "
-              "Reload ordinary modules or rerun inline cells, then rerun dependent cells.")
+        for label, link in sorted(self.links.items()):
+            path = link.path
+            try:
+                path, current = link.current()
+                state = 'unchanged' if current == link.baseline else 'changed'
+                if path != link.path:
+                    state += '; destination changed'
+            except (OSError, ValueError, SyntaxError) as exc:
+                state = f'unavailable: {exc}'
+            print(f'{label} [sync]: {state} sha256:{link.baseline} ({path})')
+
+        print("Status compares on-disk source with the last load, copy or sync; "
+              "it cannot inspect unrun cell edits and cannot certify downstream results are fresh. "
+              "Rerun linked cells or reload copied/imported code, then rerun dependent cells.")
 
     @line_magic
     def load_clean_check(self, line: str) -> None:

@@ -52,7 +52,7 @@ def destination(value: str | Path) -> Path:
 def parse_header(line: str) -> tuple[str, str | None] | None:
     """Distinguish the new path interface from legacy import-selection modes."""
     args = shlex.split(line)
-    if not args or args[0] in {'default', 'inline', 'skeleton', 'from', 'import'}:
+    if not args or args[0] in {'default', 'inline', 'copy', 'skeleton', 'from', 'import'}:
         return None
     if len(args) not in (1, 3) or (len(args) == 3 and (
         args[1] != '--base' or not re.fullmatch('[0-9a-f]{64}', args[2])

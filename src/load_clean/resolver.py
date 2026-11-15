@@ -41,7 +41,7 @@ def _globals(source):
 
 
 class LoadCleanResolver:
-    def resolve(self, import_line, names, mode='default', *, source_roots: list[str | Path] | None = None):
+    def resolve(self, import_line, names, mode='default', *, source_roots: list[str | Path] | None = None, include_imports: bool | None = None):
         if mode not in VALID_MODES:
             raise ValueError(f'Unknown mode {mode!r}')
         module, targets, wildcard, _ = parse_import(import_line)
@@ -86,6 +86,10 @@ class LoadCleanResolver:
                 raise ValueError(f'Symbol {name!r} not found in {path}')
             include(name)
         nodes = [n for n in tree.body if n in selected or isinstance(n, ast.ImportFrom) and n.module == '__future__']
+        if include_imports is None:
+            include_imports = mode == 'inline'  # Preserve legacy inline behavior.
+        if not include_imports:
+            nodes = [n for n in nodes if not isinstance(n, (ast.Import, ast.ImportFrom))]
         if mode == 'skeleton':
             class Stub(ast.NodeTransformer):
                 def visit_FunctionDef(self, node):

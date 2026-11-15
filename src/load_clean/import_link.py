@@ -92,30 +92,73 @@ def spans(source: str, names: list[str]) -> list[tuple[int, int, str]]:
     return result
 
 
-def selection(source: str, names: list[str]) -> str:
+def import_spans(source: str) -> list[tuple[int, int, str]]:
+    tree = ast.parse(source)
+    result = []
+    for index, node in enumerate(tree.body):
+        if not isinstance(node, (ast.Import, ast.ImportFrom)):
+            continue
+        if any(other is not node and other.lineno <= node.end_lineno
+               and other.end_lineno >= node.lineno for other in tree.body):
+            raise ValueError('Imports sharing a line cannot be linked separately')
+        result.append((node.lineno - 1, node.end_lineno, f'import:{index}'))
+    return result
+
+
+def selection(source: str, names: list[str], *, include_imports: bool = True) -> str:
     lines = source.splitlines(keepends=True)
-    return canonical('\n\n'.join(''.join(lines[start:end]).rstrip('\r\n') for start, end, _ in spans(source, names)))
+    regions = spans(source, names)
+    if include_imports:
+        regions += import_spans(source)
+    return canonical('\n\n'.join(''.join(lines[start:end]).rstrip('\r\n')
+                                 for start, end, _ in sorted(regions)))
 
 
 def replace_selection(remote: str, local: str, names: list[str]) -> str:
     validate(local)
     local_tree = ast.parse(local)
-    if len(local_tree.body) != len(names) or {_definition_name(node) for node in local_tree.body} != set(names):
-        raise ValueError('Keep exactly the selected definitions and their original names; edit module-level imports and dependencies in the source file')
+    definitions = [node for node in local_tree.body if not isinstance(node, (ast.Import, ast.ImportFrom))]
+    if len(definitions) != len(names) or {_definition_name(node) for node in definitions} != set(names):
+        raise ValueError('Keep exactly the selected definitions and their original names')
     local_lines = local.splitlines(keepends=True)
-    owned = {line for start, end, _ in spans(local, names) for line in range(start, end)}
+    local_regions = spans(local, names) + import_spans(local)
+    owned = {line for start, end, _ in local_regions for line in range(start, end)}
     if any(text.strip() for index, text in enumerate(local_lines) if index not in owned):
         raise ValueError('Place comments inside the selected definitions; extra cell content cannot be saved to a selected region')
     replacements = {name: ''.join(local_lines[start:end]).rstrip('\r\n') + '\n'
                     for start, end, name in spans(local, names)}
     lines = remote.splitlines(keepends=True)
-    for start, end, name in reversed(spans(remote, names)):
-        replacement = replacements[name]
-        if lines[start:end] and lines[start].endswith('\r\n'):
+    edits = [(start, end, replacements[name]) for start, end, name in spans(remote, names)]
+    remote_imports = import_spans(remote)
+    local_imports = [''.join(local_lines[start:end]).rstrip('\r\n') + '\n'
+                     for start, end, _ in import_spans(local)]
+    previous_imports = [''.join(lines[start:end]).replace('\r\n', '\n').rstrip('\n') + '\n'
+                        for start, end, _ in remote_imports]
+    if local_imports != previous_imports:
+        # Preserve positions/text when imports are unchanged. Changed imports form
+        # a block at the first existing import, or after the module docstring.
+        if remote_imports:
+            edits += [(start, end, ''.join(local_imports) if i == 0 else '')
+                      for i, (start, end, _) in enumerate(remote_imports)]
+        else:
+            tree = ast.parse(remote)
+            first = tree.body[0] if tree.body else None
+            if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) and isinstance(first.value.value, str):
+                position = first.end_lineno
+            elif first is not None:
+                position = min([first.lineno, *(d.lineno for d in getattr(first, 'decorator_list', []))]) - 1
+            else:
+                position = len(lines)
+            edits.append((position, position, ''.join(local_imports)))
+    crlf = bool(lines and lines[0].endswith('\r\n'))
+    for start, end, replacement in sorted(edits, reverse=True):
+        if crlf:
             replacement = replacement.replace('\n', '\r\n')
         lines[start:end] = [replacement]
     result = ''.join(lines)
     validate(result)
+    # Import edits must not introduce ambiguous bindings for the selection.
+    spans(result, names)
     return result
 
 

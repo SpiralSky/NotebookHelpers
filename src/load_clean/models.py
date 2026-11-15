@@ -20,3 +20,4 @@ class LoadCleanCell:
     mode: str
     import_line: str
     names: list[str]
+    include_imports: bool = False

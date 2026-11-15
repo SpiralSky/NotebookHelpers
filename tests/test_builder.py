@@ -17,7 +17,7 @@ from load_clean_tools.notebook_builder import build, clean_notebook
 
 def test_parser_preserves_existing_extension_api() -> None:
     """Keep the mode constant required by the IPython extension."""
-    assert VALID_MODES == {"default", "inline", "skeleton"}
+    assert VALID_MODES == {"default", "inline", "copy", "skeleton"}
 
 
 def test_parse_load_clean_cell_reads_requested_names() -> None:
@@ -382,3 +382,26 @@ def test_doctor_checkout_guidance(monkeypatch, capsys):
     assert cli.main(["doctor"]) == 0
     output = capsys.readouterr().out
     assert "source checkout" in output and "python -m pip install -e" in output
+
+
+@pytest.mark.parametrize('mode', ['copy', 'skeleton'])
+def test_export_copy_import_policy(tmp_path, mode):
+    from load_clean_tools.notebook_builder import resolve_cells
+    (tmp_path / 'copy_helper.py').write_text('import math\ndef magnitude(x): return math.sqrt(x)\n')
+    notebook = nbformat.v4.new_notebook(cells=[
+        nbformat.v4.new_code_cell(f'%%load_clean {mode}\nfrom copy_helper import magnitude'),
+        nbformat.v4.new_code_cell(f'%%load_clean {mode} --include-imports\nfrom copy_helper import magnitude'),
+    ])
+    resolve_cells(notebook, source_roots=[tmp_path])
+    assert 'import math' not in notebook.cells[0].source
+    assert 'import math' in notebook.cells[1].source
+    assert ('NotImplementedError' in notebook.cells[1].source) == (mode == 'skeleton')
+
+
+def test_export_sync_include_imports_keeps_identifying_import(tmp_path):
+    from load_clean_tools.notebook_builder import resolve_cells
+    notebook = nbformat.v4.new_notebook(cells=[
+        nbformat.v4.new_code_cell('%%load_clean --include-imports\nfrom absent_helper import f'),
+    ])
+    resolve_cells(notebook)
+    assert notebook.cells[0].source == 'from absent_helper import f  # noqa: F401'

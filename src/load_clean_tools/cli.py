@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import importlib.util
 import sys
 from pathlib import Path
@@ -58,7 +59,7 @@ def create_parser() -> argparse.ArgumentParser:
     for name in ("pair", "sync"):
         command = commands.add_parser(name, help="Create a notebook/py:percent pair" if name == "pair" else "Synchronize a saved pair by file recency")
         command.add_argument("--source", required=True, help="One saved .ipynb or py:percent file (no directory scanning)")
-    commands.add_parser("doctor", help="Report optional notebook dependencies")
+    commands.add_parser("doctor", help="Report package version, installation paths and optional dependencies")
     return parser
 
 
@@ -69,6 +70,15 @@ def main(argv: list[str] | None = None) -> int:
     parser = create_parser()
     args = parser.parse_args(args_list)
     if args.command == "doctor":
+        import load_clean
+
+        try:
+            version = importlib.metadata.version('load-clean')
+        except importlib.metadata.PackageNotFoundError:
+            version = 'unknown (distribution metadata unavailable; possibly a source checkout)'
+        print(f'load-clean version: {version}')
+        print(f'load_clean module: {Path(load_clean.__file__).resolve()}')
+        print(f'load_clean_tools CLI: {Path(__file__).resolve()}')
         print(f"Python: {sys.executable}")
         print("sys.path:")
         for entry in sys.path:
