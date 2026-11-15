@@ -26,8 +26,12 @@ Completed the approved follow-up:
   the existing export example remains unchanged. Guidance emphasizes sync/copy/
   skeleton while documenting compatibility syntax.
 
-No new release/tag requested in this resumed unit. Future work should follow
-concrete user feedback; do not infer authorization for unrelated interfaces.
+The user subsequently requested push and tag. Implementation `35864a7` was
+pushed, but tag `v0.0.6` accidentally preceded the blocked version commit and
+points to package version 0.0.5; its release CI must fail. Preserve that published
+tag. Version 0.0.7 is prepared as the corrected release; CI gates release assets.
+Future work should follow concrete user feedback; do not infer authorization
+for unrelated interfaces.
 
 ## Verification and limits
 

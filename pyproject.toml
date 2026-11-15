@@ -8,7 +8,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "load-clean"
-version = "0.0.5"
+version = "0.0.7"
 description = "Resolve Python definitions and build clean notebooks"
 readme = "README.md"
 license = "MIT"
