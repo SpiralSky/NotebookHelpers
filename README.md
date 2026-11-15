@@ -1,13 +1,8 @@
 # load-clean
 
-Experiment in notebooks, keep reusable Python in files, and embed selected
-helpers when exporting notebooks. Python 3.10–3.14 is covered by CI.
-
-Use ordinary imports for development, Jupytext for Git-friendly notebook text,
-and load-clean for selected source embedding and clean notebook delivery.
-Promote a prototype with `%%load_clean_save --preview helpers.py`, then remove
-`--preview` to create a new module and replace the writer cell with an import.
-See [save semantics and export tagging](docs/usage.md#save-a-prototype-as-a-module).
+Edit Python in a notebook or a file, then synchronize when you run the linked
+cell. Conflicting edits stop with a diff instead of overwriting either copy.
+Python 3.10–3.14 is covered by the CI configuration.
 
 ## Start here
 
@@ -15,22 +10,47 @@ From a source checkout, in the environment used by your notebook kernel:
 
 ```sh
 python -m pip install -e '.[notebook,tools]' ipykernel
-cd examples
-load-clean build --source dev_example.ipynb --source-root . --output ../build --execute
 ```
 
-This writes `build/example.ipynb` at the repository root and runs its assertion
-and greeting in a fresh kernel. `--source-root .` explicitly selects `examples`
-for static helper lookup. Omit `--execute` to build without executing code.
-The original notebook
-is preserved; an existing generated output is replaced.
+Run `%load_ext load_clean` once, then create a new linked file with:
 
-Follow [the notebook-to-files workflow](docs/workflow.md) for interactive setup,
-rapid iteration, saving prototypes into modules, text pairing, Git review, and
-project layout. A notebook frontend is installed separately; the `notebook`
+```python
+%%load_clean helpers.py
+def double(value):
+    return value * 2
+```
+
+Or open an existing file with `%load_clean helpers.py`. It requests a new editable
+cell without executing the file. Remove or tag that one-time loader cell
+`load-clean-remove` before exporting. One cell owns the **complete file**, including
+imports; do not use a partial function copy to link an existing larger module.
+
+Keep the generated header (including `--base`) and edit/run normally. Cell-only
+edits save to the file; file-only edits refresh the cell and run the new source;
+different edits on both sides produce an error before writing or executing.
+Run your tests or calculations in separate cells, for example `double(21)`.
+
+Cell insertion/replacement uses IPython editor requests, not a JupyterLab plugin.
+If your frontend ignores them, copy the displayed updated cell, including its
+header, before editing further. There is no background file watcher.
+
+Follow [the workflow guide](docs/workflow.md) for conflicts, export, and Git review.
+A notebook frontend is installed separately; the `notebook`
 extra supplies IPython, not JupyterLab.
 
-## Choose an export mode
+## Export and compatibility
+
+Tag the extension setup cell `load-clean-remove`, save `dev_analysis.ipynb`, then:
+
+```sh
+load-clean build --source dev_analysis.ipynb --output build --execute
+```
+
+Linked cells export their saved notebook body as ordinary Python. Export does
+not sync files: run the linked cells and save the notebook first. The output is
+`build/analysis.ipynb`; source inputs are preserved, generated outputs replaced.
+
+The older import-selection interface remains available for selective embedding:
 
 Load `%load_ext load_clean` once in your notebook, then run:
 
@@ -45,8 +65,9 @@ from example_helpers import greet
 | `inline` | Embed selected definitions and supported static local dependencies |
 | `skeleton` | Create exercise stubs that raise `NotImplementedError` |
 
-The magic body accepts imports and an optional final selection list, not arbitrary
-Python experiments. Embedding does not vendor every dependency and rejects
+These legacy import-selection forms accept imports and an optional final selection
+list. Path-based linked cells accept a complete Python module instead.
+Selective embedding does not vendor every dependency and rejects
 unsupported constructs. Use ordinary imports when embedding is unnecessary.
 
 ## Reference and development

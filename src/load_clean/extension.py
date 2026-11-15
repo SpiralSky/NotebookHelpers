@@ -6,11 +6,13 @@ from pathlib import Path
 from typing import Any
 
 from IPython.core.error import UsageError
-from IPython.core.magic import Magics, cell_magic, line_magic, magics_class
+from IPython.core.magic import Magics, cell_magic, line_cell_magic, line_magic, magics_class
+from IPython.display import Code, display
 
 from .api import resolve_cell, save_cell
 from .parser import parse_import, parse_load_clean_cell
 from .resolver import resolve_module
+from .linked import fingerprint, load_link, parse_header, sync_link
 
 
 def _fingerprint(path: Path) -> str:
@@ -45,9 +47,34 @@ class LoadCleanMagics(Magics):
         except (ValueError, SyntaxError, ImportError, OSError) as exc:
             raise UsageError(str(exc)) from exc
 
-    @cell_magic
-    def load_clean(self, line: str, cell: str = "") -> None:
-        """Execute the import or selected static definitions in the user namespace."""
+    @line_cell_magic
+    def load_clean(self, line: str, cell: str | None = None) -> None:
+        """Load a linked file, or synchronize and execute its editable cell."""
+        try:
+            linked = parse_header(line)
+            if cell is None:
+                if linked is None or linked[1] is not None:
+                    raise ValueError('Usage: %load_clean path.py (load without execution)')
+                result = load_link(linked[0])
+                self.shell.set_next_input(result.cell, replace=False)
+                print(f'{result.status}: {result.path}. New cell requested; if your editor does not insert it, copy the cell below.')
+                display(Code(result.cell, language='python'))
+                return
+            if linked is not None:
+                result = sync_link(linked[0], cell, linked[1])
+                self.shell.set_next_input(result.cell, replace=True)
+                print(f'{result.status}: {result.path}. Synced before execution.')
+                if fingerprint(result.source) != linked[1]:
+                    print('Editor update requested. If not applied, copy this linked cell before editing:')
+                    display(Code(result.cell, language='python'))
+        except (ValueError, SyntaxError, OSError) as exc:
+            raise UsageError(str(exc)) from exc
+        if linked is not None:
+            # Runtime errors occur after synchronization and must not undo the save.
+            exec(compile(result.source, str(result.path), 'exec', dont_inherit=True), self.shell.user_ns)
+            return
+
+        # Keep the original import-selection forms as explicit compatibility paths.
         parsed = self._parse(line, cell)
         if parsed.mode == "default":
             # Execute exactly the user's import, with normal Python binding semantics.

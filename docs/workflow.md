@@ -1,220 +1,117 @@
-# Experiment in notebooks, maintain code in files
+# Edit, run, and synchronize
 
-Use notebooks for experiments and explanations, Python modules for reusable
-functions, and tests for behavior you want to preserve. load-clean brings selected
-module definitions into a notebook when you need an embedded export. Use its whole-cell save action to promote a prototype into a new module;
-after promotion, edit the module directly.
+Use your notebook editor with an IPython kernel. Install load-clean in that kernel
+with `python -m pip install -e /path/to/NotebookHelpers[notebook,tools] ipykernel`
+(quote the path and extras in shells that expand brackets). The project does not
+require JupyterLab; frontend support for cell insertion/replacement varies.
 
-## Choose what you want to save
+## Start a linked module
 
-| Goal | Use | Source of truth |
-| --- | --- | --- |
-| Review notebook cells in Git | Jupytext `py:percent` pairing | Synchronize the pair before reviewing; edit one representation at a time |
-| Reuse and test functions across notebooks | Ordinary `.py` modules with imports and IPython autoreload | The module after promoting a prototype |
-| Deliver a notebook with selected helper source included | load-clean `inline` and build | Modules and development notebook; the build is generated |
-| Author an entire package in notebooks | Consider nbdev | Notebook export cells; generated modules are outputs |
-
-A text notebook is still a notebook: it can contain experiments, magics, and
-side effects. Pairing it does not turn it into an importable library.
-
-## Try the existing example
-
-From this repository's root, install into the Python environment you will also
-use for the notebook kernel:
-
-```sh
-python -m pip install -e '.[notebook,tools]' ipykernel
-cd examples
-load-clean pair --source dev_example.ipynb
-```
-
-This creates `dev_example.py` beside the notebook and records the pairing.
-Open `examples/dev_example.ipynb` in your existing notebook frontend, select that
-Python environment, and insert this setup cell before the existing cells:
+Run this setup cell once and tag it `load-clean-remove` for export:
 
 ```python
 %load_ext load_clean
 ```
 
-Give the setup cell the `load-clean-remove` tag so it is excluded from exports.
-Run the notebook: the final cell should print `Hello, world!`. If the helper
-cannot be found, check `%pwd`: this example expects the kernel's working directory
-to be `examples`. The extension must be installed in the selected kernel, not
-only in the terminal's Python environment. A Jupyter frontend is not included
-in the package extras.
+Create a new file from a complete module cell:
 
-Save and close the notebook before synchronizing from a terminal. From `examples`:
+```python
+%%load_clean helpers.py
+import math
+
+def magnitude(x, y):
+    return math.sqrt(x * x + y * y)
+```
+
+Running creates the file, executes the body, and requests an updated header with
+an absolute path and baseline hash. Keep that header unchanged. For an existing
+module, run `%load_clean helpers.py` instead: it loads the complete source into a
+new linked cell without executing it. If the editor does not insert/replace cells,
+copy the displayed cell including its header. A differing existing file is never
+silently adopted by a new cell without a baseline.
+Remove the one-time `%load_clean` loader cell or tag it `load-clean-remove`; keep
+the generated linked code cell. Export rejects an untagged loader cell.
+
+One cell owns the whole module, including imports and comments. This version does
+not synchronize a single function inside a larger module. Use small helper modules
+when you want small editable cells. Put temporary computations in separate cells:
+
+```python
+assert magnitude(3, 4) == 5
+magnitude(5, 12)
+```
+
+## Edit on either side
+
+Edit the linked cell and press Run: it validates, writes the file, and executes.
+Edit the file instead and press Run on the unchanged cell: it requests a refreshed
+cell, displays the updated source, and executes the file version. The baseline
+lives in the header, so save the notebook to retain it across restarts.
+
+No background synchronization occurs. Ordinary notebook Save only saves the
+notebook, and ordinary file Save only saves the module. Running the linked cell
+is the synchronization point. A runtime failure leaves a successful sync saved;
+invalid syntax prevents a write. Status and execution success are distinct.
+
+If both copies changed differently, Run reports a conflict and a diff. Neither
+copy is written and no cell code executes. Preserve both copies, reconcile them,
+and make their contents identical before running again. Alternatively load the
+file into a new cell and manually transfer edits. Do not delete or change the hash
+to force an overwrite. Git commits help you review and recover committed versions;
+they do not protect every uncommitted edit.
+
+The editor update is a request, not an acknowledged hook. If your editor ignores
+it, the displayed refreshed cell is the fallback; copy it before editing further.
+There is no automatic merge and no background file watcher. Avoid saving from two
+editors during the same run; the final byte comparison and atomic write are not a
+filesystem compare-and-swap. Detailed limits are in [the reference](usage.md).
+
+Functions execute in the notebook namespace. Separate `import helpers` consumers
+still obey normal Python caching; they are not automatically reloaded. Previously
+computed notebook results also remain unchanged until their cells run again.
+Restart and run the notebook to check that it does not depend on stale kernel state.
+
+## Export a snapshot
+
+Run linked cells, save the notebook as `dev_analysis.ipynb`, then:
 
 ```sh
-load-clean sync --source dev_example.ipynb
-load-clean check --source dev_example.py --source-root . --output ../build
-load-clean build --source dev_example.py --source-root . --output ../build --execute
+load-clean check --source dev_analysis.ipynb --output build
+load-clean build --source dev_analysis.ipynb --output build --execute
 ```
 
-The check prints the proposed output path but writes nothing. Build produces
-`build/example.ipynb` at the repository root, executes it in a fresh kernel,
-and retains the new outputs. Without `--execute`, build clears outputs and does
-not execute cells. The original notebook is preserved; an existing build target
-is replaced. The export contains `greet` as ordinary Python and no load-clean
-cell magic. The explicit `--source-root .` selects the directory containing the uninstalled
-example helper for static lookup with either CLI entry point. It does not change
-the execution kernel's import path; ordinary imports still require their packages
-to be available in that kernel.
-Always select one file explicitly when a directory contains both
-paired representations: directory builds reject that ambiguity and print both
-valid explicit file commands. They never synchronize or select a side for you.
+The output is `build/analysis.ipynb`. Linked headers become ordinary Python bodies;
+imports remain inside the cells. Build does not read or synchronize linked files,
+so exports work after those files are moved or removed. Export uses the saved
+notebook snapshot, not unseen edits in the editor or the newest module on disk.
+The extension setup cell must be tagged `load-clean-remove`. Generated exports
+can replace prior outputs, but source notebooks are preserved.
 
-## Iterate on reusable code
+Recipients do not need load-clean for these cells. They still need third-party
+libraries, data files, and any modules imported by the bodies. Running ordinary
+Python can have side effects; export removes the synchronization action only.
 
-For daily development, ordinary imports avoid maintaining a second function
-body in the notebook. In a development-only cell tagged `load-clean-remove`:
+For selected definitions from a larger module, the older explicit
+`%%load_clean inline` import-selection interface remains available. That is an
+export snapshot mechanism, not a linked function editor. See [usage](usage.md).
 
-```python
-%load_ext autoreload
-%autoreload 2
-```
+## Git and notebook pairing
 
-Use this in an ordinary cell:
+Track modules, tests, and the notebook representation your project needs. Keep
+`.venv/` and generated `build/` output out of Git. Review `git diff` before committing.
+New files appear in `git status`; read them before staging.
 
-```python
-import example_helpers
-assert example_helpers.greet("world") == "Hello, world!"
-```
-
-Edit and save `example_helpers.py`, then rerun the calling cell to try the change.
-Without autoreload, use ordinary Python explicitly:
-
-```python
-import importlib
-importlib.invalidate_caches()
-importlib.reload(example_helpers)
-assert example_helpers.greet("world") == "Hello, world!"
-```
-
-Plain imports retain Python's module cache. Prefer module-qualified calls after
-reload; old `from module import function` bindings may need importing again.
-[Autoreload](https://ipython.readthedocs.io/en/stable/config/extensions/autoreload.html)
-refreshes imports before cell execution, but has limitations around changed class
-structure and extension modules. Restart and run all cells before accepting a
-result; reloading does not rerun earlier computations or refresh old results.
-
-For a function prototyped in a notebook, first preview its complete module
-source (include required imports and globals). The parent directory must exist:
-
-```python
-%%load_clean_save --preview scratch_helpers.py
-# Keep this comment in the module.
-def double(value):
-    return value * 2
-```
-
-Preview prints the absolute destination and exact source without writing or
-executing anything. Remove `--preview` and run the cell to create the file.
-Existing files are refused, including files created by a competing writer.
-The body is saved exactly as UTF-8, with Python syntax checked first; it is not
-executed. This saves the entire cell, without merging or capturing kernel state.
-
-**Transfer ownership to the module:** replace the writer/definition cell with
-`from scratch_helpers import double`, then add a test such as
-`assert double(4) == 8` in your test suite. Edit `scratch_helpers.py` from then on.
-The magic leaves the existing notebook cell unchanged. If you temporarily keep
-it for reference, tag it `load-clean-remove`; a default rerun refuses to overwrite
-later edits. There is no replacement option. An untagged save cell blocks export
-with instructions to remove or tag it, so exported notebooks cannot accidentally
-write a module. Tag the extension setup cell too.
-
-For delivery, replace the ordinary import with `%%load_clean inline` plus
-`from scratch_helpers import double`, as in the supplied example. Save the
-notebook, synchronize any pair, then check/build the selected file. Build removes
-tagged writer/setup cells before resolving imports and clears prior outputs;
-`--execute` verifies the result in a fresh kernel. Keep the stable test in the
-module's test suite independently of the notebook.
-
-The save report suggests an import for ordinary filesystem layouts already on
-Python's source path, including packages. For `src/my_project` layouts, install
-the consumer project with `python -m pip install -e .` into the kernel environment
-before importing. Saving never runs that setup or the suggested import. See
-[the reference](usage.md#save-a-prototype-as-a-module) for path and safety limits.
-
-Use `inline` when preparing an export, as in the supplied example. It reads
-supported source from disk when its cell is run or the notebook is built; it does
-not track later edits automatically. Rerun the inline cell and dependent cells
-after editing the module. Preview/check are available in [the reference](usage.md).
-Embedding does not include every third-party dependency or support all Python
-constructs. Ordinary imports remain the fallback for unsupported code.
-
-## Review and organize work
-
-A growing consumer project can use this layout:
-
-```text
-pyproject.toml
-src/my_project/          # reusable modules; install with pip install -e .
-notebooks/dev_trial.py  # text notebook tracked in Git
-notebooks/dev_trial.ipynb  # local outputs, or tracked if your team needs them
-tests/                  # repeatable checks independent of notebook state
-build/                  # generated delivery notebooks
-```
-
-Use an installed package once helpers live outside the notebook directory rather
-than adding ad hoc `sys.path` edits to each notebook. Keep `build/` out of Git.
-For the small example, review the paired text and helper with:
+Optionally create a Git-friendly percent-format notebook:
 
 ```sh
-git diff -- dev_example.py example_helpers.py
-git status --short
+load-clean pair --source dev_analysis.ipynb
+load-clean sync --source dev_analysis.ipynb
 ```
 
-A new file appears in status but not in an unstaged `git diff`; open it before
-staging. Teams can track only the text notebook and keep `.ipynb` outputs locally,
-or track both deliberately. Do not blanket-ignore existing notebooks without
-checking whether their outputs are part of the deliverable.
-
-[Jupytext pairing](https://jupytext.org/using/paired-notebooks/) preserves outputs
-in `.ipynb` and uses the newer representation for inputs. CLI synchronization is
-explicit through `load-clean sync --source saved-file.ipynb` (or its paired `.py`);
-selecting that path does not force it to win over a newer counterpart. Pair and
-sync print `created`, `updated`, or `unchanged` for each exact file, comparing
-content bytes; Jupytext may also adjust timestamps. Ordinary helper modules and
-directories are refused. Automatic save integration requires Jupytext in the Jupyter server
-environment. Save/close before switching editors and synchronize before reopening.
-The CLI sees saved disk files and cannot access unsaved editor changes. It does
-not track edit history or detect divergent edits reliably. If both copies were
-edited, back up both and reconcile them before syncing; timestamp selection is
-not a semantic merge. To export the intended saved input without syncing, use
-`load-clean build --source dev_example.ipynb` or
-`load-clean build --source dev_example.py`. To make one copy authoritative for
-future pairing, back up both outside the pair directory, remove the unwanted
-counterpart, then run `load-clean pair --source` on the retained file. Review the
-new pair before reopening an editor. Pair refuses an existing counterpart.
-
-If notebook cells should remain the authoritative implementation of an entire
-library, evaluate [nbdev](https://nbdev.fast.ai/tutorials/tutorial.html), which
-exports designated cells to modules and integrates tests and documentation.
-That is a different authoring model from promoting experiments into ordinary
-modules; load-clean does not currently offer that package workflow.
-
-## Complete a promoted prototype
-
-Preview/save `scratch_helpers.py` above, replace the writer with an ordinary
-import, and run its behavior test. Edit the module, explicitly reload it (or use
-autoreload), and rerun the test and dependent calculations. For a standalone
-export, use an inline selection and rerun it after the edit. Save/close the
-notebook, pair once, then sync the saved pair. Review helper and notebook text
-with Git before exporting the deliberately selected input:
-
-```sh
-load-clean pair --source dev_trial.ipynb  # once, before its counterpart exists
-load-clean sync --source dev_trial.ipynb
-git diff -- dev_trial.py scratch_helpers.py
-git status --short
-load-clean check --source dev_trial.py --source-root . --output build
-load-clean build --source dev_trial.py --source-root . --output build --execute
-```
-
-Tag writer/setup/autoreload cells `load-clean-remove`. The generated notebook
-contains ordinary source, requires no development magics, and cannot recreate
-its helper through the removed writer. Check performs static validation only;
-`--execute` runs the cleaned notebook in a fresh kernel. Neither operation
-rewrites the helper or selected source. Status compares files to recorded loads;
-it cannot certify downstream freshness. Recompute dependent cells explicitly.
+These CLI commands synchronize the notebook and its text representation via
+Jupytext. They are separate from linked-cell/module synchronization. Save and
+close editors before switching representations. Jupytext uses saved-file recency,
+not a three-way merge; selecting a source path does not force that side to win.
+If both representations were edited, back up and reconcile them before syncing.
+Pair refuses an existing counterpart, and directory builds reject ambiguous
+pairs. Always select the intended saved notebook file explicitly for export.

@@ -192,6 +192,47 @@ def test_load_clean_marker_inside_string_is_preserved():
     assert clean_notebook(notebook).cells[0].source == source
 
 
+@pytest.mark.parametrize('prefix', ['', '\n', ' \n\t\n'])
+def test_linked_export_is_snapshot_without_sync(tmp_path, prefix):
+    from load_clean.linked import LinkedSource
+
+    path = tmp_path / 'missing.py'
+    body = 'import math\nvalue = math.sqrt(16)\n'
+    source = prefix + LinkedSource(path, body, '').cell
+    notebook = Notebook([Cell(cell_type='code', source=source, metadata={}, outputs=[], execution_count=None)])
+    assert clean_notebook(notebook).cells[0].source == body
+    assert not path.exists()
+
+
+@pytest.mark.parametrize('prefix', ['', '\n', ' \n\t\n'])
+def test_link_loader_requires_removal_before_export(prefix):
+    cell = Cell(cell_type='code', source=prefix + '%load_clean helpers.py', metadata={})
+    with pytest.raises(ValueError, match='file-loading command cell'):
+        clean_notebook(Notebook([cell]))
+    cell.metadata = {'tags': ['load-clean-remove']}
+    assert clean_notebook(Notebook([cell])).cells == []
+
+
+@pytest.mark.skipif(nbformat is None, reason='nbformat not installed')
+def test_linked_export_executes_without_extension_or_source(tmp_path):
+    pytest.importorskip('nbclient')
+    pytest.importorskip('ipykernel')
+    from load_clean.linked import LinkedSource
+
+    source = tmp_path / 'dev_linked.ipynb'
+    body = 'import math\ndef root(x):\n    return math.sqrt(x)\n'
+    notebook = nbformat.v4.new_notebook(cells=[
+        nbformat.v4.new_code_cell(LinkedSource(tmp_path / 'missing.py', body, '').cell),
+        nbformat.v4.new_code_cell('assert root(16) == 4\nprint(root(16))'),
+    ])
+    nbformat.write(notebook, source)
+    original = source.read_bytes()
+    target = build(source, output=tmp_path / 'build', execute=True)
+    result = nbformat.read(target, as_version=4)
+    assert result.cells[1].outputs[0].text == '4.0\n'
+    assert source.read_bytes() == original and not (tmp_path / 'missing.py').exists()
+
+
 @pytest.mark.parametrize("prefix", ["", "\n", "\n\n", " \n\t\n"])
 def test_untagged_save_cell_requires_removal(prefix, monkeypatch):
     from IPython.core.inputtransformer2 import TransformerManager

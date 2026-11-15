@@ -10,6 +10,7 @@ from typing import Any
 
 from load_clean.api import resolve_cell
 from load_clean.parser import parse_load_clean_cell
+from load_clean.linked import parse_header, validate
 
 
 def _dependency(name: str, extra: str = "tools") -> Any:
@@ -40,6 +41,15 @@ def resolve_cells(notebook: Any, *, source_roots: list[str | Path] | None = None
             first_line = cell.source.lstrip().splitlines()[0:1]
             if first_line and first_line[0].strip().split(None, 1)[0:1] == ["%%load_clean_save"]:
                 raise ValueError("Remove the save cell or tag it load-clean-remove before export")
+            if first_line and first_line[0].strip().split(None, 1)[0:1] == ["%load_clean"]:
+                raise ValueError("Remove the file-loading command cell or tag it load-clean-remove before export; keep the generated linked cell")
+            if first_line and first_line[0].strip().split(None, 1)[0:1] == ["%%load_clean"]:
+                header, _, body = cell.source.lstrip().partition('\n')
+                if parse_header(header.strip()[len('%%load_clean'):].strip()) is not None:
+                    # Export the saved notebook snapshot; never synchronize or
+                    # access the linked file during a static check/build.
+                    cell.source = validate(body)
+                    continue
             parsed = parse_load_clean_cell(cell.source)
             if parsed:
                 cell.source = resolve_cell(parsed.import_line, parsed.names, parsed.mode, source_roots=source_roots)

@@ -103,3 +103,70 @@ def test_edit_reload_and_inline_rerun(shell, tmp_path, capsys):
     shell.run_cell_magic('load_clean', 'inline', 'from magic_example import answer')
     assert shell.user_ns['answer']() == 12345
     assert old_result == 3
+
+
+def test_linked_cell_complete_cycle(shell, tmp_path, monkeypatch, capsys):
+    from load_clean.linked import parse_header
+
+    path = tmp_path / 'linked.py'
+    calls = []
+    monkeypatch.setattr(shell, 'set_next_input', lambda source, replace: calls.append((source, replace)))
+    source = 'def double(x):\n    return x * 2\n'
+    shell.run_cell_magic('load_clean', str(path), source)
+    assert path.read_text() == source
+    assert shell.user_ns['double'](4) == 8
+    assert calls[-1][1] is True
+    header, body = calls[-1][0].split('\n', 1)
+    line = header[len('%%load_clean '):]
+    assert parse_header(line)[1] is not None
+
+    shell.run_cell_magic('load_clean', line, body.replace('* 2', '* 3'))
+    assert shell.user_ns['double'](4) == 12
+    assert '* 3' in path.read_text()
+    header, body = calls[-1][0].split('\n', 1)
+    line = header[len('%%load_clean '):]
+    path.write_text(source.replace('* 2', '* 4'))
+    shell.run_cell_magic('load_clean', line, body)
+    assert shell.user_ns['double'](4) == 16
+    assert '* 4' in calls[-1][0]
+    assert 'Updated from file' in capsys.readouterr().out
+
+    # A competing notebook edit cannot overwrite the changed file or execute.
+    with pytest.raises(UsageError, match='Sync conflict'):
+        shell.run_cell_magic('load_clean', line, body.replace('* 3', '* 5'))
+    assert shell.user_ns['double'](4) == 16
+    assert '* 4' in path.read_text()
+
+
+def test_link_load_does_not_execute(shell, tmp_path, monkeypatch):
+    path = tmp_path / 'linked.py'
+    path.write_text('raise RuntimeError("must not execute")\n')
+    calls = []
+    monkeypatch.setattr(shell, 'set_next_input', lambda source, replace: calls.append((source, replace)))
+    shell.run_line_magic('load_clean', str(path))
+    assert calls[-1][1] is False and '--base' in calls[-1][0]
+
+
+def test_link_runtime_error_keeps_saved_edit(shell, tmp_path, monkeypatch):
+    path = tmp_path / 'linked.py'
+    calls = []
+    monkeypatch.setattr(shell, 'set_next_input', lambda source, replace: calls.append(source))
+    source = 'raise RuntimeError("experiment failed")\n'
+    with pytest.raises(RuntimeError, match='experiment failed'):
+        shell.run_cell_magic('load_clean', str(path), source)
+    assert path.read_text() == source and '--base' in calls[-1]
+
+
+def test_ignored_editor_replacement_does_not_lose_work(shell, tmp_path, monkeypatch):
+    from load_clean.linked import fingerprint
+
+    path = tmp_path / 'linked.py'
+    path.write_text('x = 1\n')
+    line = f'{path} --base {fingerprint("x = 1")}'
+    monkeypatch.setattr(shell, 'set_next_input', lambda *a, **kw: None)
+    path.write_text('x = 2\n')
+    shell.run_cell_magic('load_clean', line, 'x = 1\n')
+    assert shell.user_ns['x'] == 2
+    with pytest.raises(UsageError, match='Sync conflict'):
+        shell.run_cell_magic('load_clean', line, 'x = 3\n')
+    assert path.read_text() == 'x = 2\n'

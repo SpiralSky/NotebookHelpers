@@ -2,6 +2,31 @@
 
 Created: 2026-11-14 · Revisited: 2026-11-14 · Revision: 3
 
+## Current decision — 2026-11-15
+
+User feedback supersedes the one-way ownership transfer below: make run-triggered
+cell/file synchronization the primary workflow. Repeatedly switching load/save
+commands is unwanted. A linked cell contains one complete Python module and an
+explicit source hash. Cell-only edits save, file-only edits refresh and execute,
+identical edits converge, and differing edits on both sides stop with a diff.
+The hash persists in the notebook header; Git commits are optional history, not
+the synchronization baseline. No automatic merge or background watcher is needed.
+
+This first implementation owns whole files, not AST-selected functions inside
+larger modules. Source text and imports remain intact. Existing AST selection
+stays available for selective export, while ordinary linked-cell export removes
+only its header and never synchronizes files. Existing import and creation-only
+commands remain compatible but are no longer the recommended authoring workflow.
+
+IPython requests cell replacement; it cannot acknowledge frontend application.
+Always show refreshed source as a fallback when updating the baseline. This is a
+known usability limit, not evidence of a verified JupyterLab/VS Code GUI flow.
+Writes validate syntax, recheck disk bytes and publish atomically; an external
+writer after the final comparison can still race. Runtime errors leave synced
+edits saved. Human usefulness remains unmeasured; current technical acceptance
+is direction/conflict handling, persistent baselines, write safety, and exports
+without linked-file mutation. The earlier decisions below record prior scope.
+
 ## Decision and objective
 
 Make the experiment → reusable module → notebook feedback → Git review → delivery
@@ -136,9 +161,10 @@ usability study was performed. These are technical checks, not UX measurements.
 2. Do one bounded unit, built/checked and committed. P1–P3 are complete. Choose follow-up work from concrete feedback;
    human observation remains unmeasured and is not an implementation blocker.
    Read only current handoff state if needed; keep the queue here authoritative.
-3. Preserve default imports, explicit skeleton stubs, optional dependencies,
-   static inspection, non-destructive editing, and opt-in execution. Existing
-   generated build targets may be replaced; source inputs may not.
+3. Preserve legacy default imports, explicit skeleton stubs, optional dependencies,
+   static inspection, non-destructive editing, and opt-in execution. Linked-cell
+   Run explicitly authorizes guarded module updates. Build/check never write source
+   inputs; only generated build targets may be replaced by export.
 4. Run relevant checks. Existing full suite:
    `PYTHONPATH=src IPYTHONDIR=/tmp/load-clean-ipython python -m pytest -q`.
    For documentation workflows, run the actual commands in a disposable copy.

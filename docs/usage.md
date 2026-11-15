@@ -3,10 +3,74 @@
 For the complete experiment → module → Git → export journey, start with
 [the workflow guide](workflow.md). This page is the command and API reference.
 
-## Notebook modes
+## Linked cells: primary interface
 
-Load `%load_ext load_clean` once per IPython session. The cell magic accepts
-`default`, `inline`, and `skeleton`; omitting a mode selects `default`.
+Load `%load_ext load_clean` once. `%load_clean path.py` reads a complete existing
+UTF-8 module and requests a new linked cell, without execution. Alternatively,
+`%%load_clean path.py` with a Python body creates a new file and executes it.
+Quote paths containing spaces. Parent directories must exist; symlink files and
+parents are refused. A cell represents the whole file, not one selected function.
+
+The generated header is `%%load_clean /absolute/path.py --base SHA256`. Keep it:
+the digest records the last synchronized source and survives kernel restarts
+when the notebook is saved. There is no hidden per-kernel baseline or Git commit
+requirement. Line endings and trailing newlines are normalized for comparison;
+comments, internal whitespace, and other source text are preserved. A differing
+existing file cannot be overwritten by a cell without a baseline.
+
+On each Run:
+
+| Cell vs baseline | File vs baseline | Result |
+| --- | --- | --- |
+| Unchanged | Unchanged | Execute cell |
+| Changed | Unchanged | Validate, save file, execute |
+| Unchanged | Changed | Validate, request refreshed cell, display source, execute file version |
+| Changed | Same content as cell | Mark in sync, execute |
+| Changed | Differently changed | Error with file/cell diff; no write or execution |
+
+Syntax is checked before writing. A runtime exception does not undo a successful
+sync; status is printed before execution. All code in the linked cell belongs to
+the module, including imports and top-level effects. Put temporary experiments
+and assertions in separate cells. Other imported module objects, old function
+references, and previous notebook results are not automatically refreshed.
+
+IPython's `set_next_input` requests insertion/replacement. No frontend acknowledgment
+is available and no GUI integration is shipped. If the request is ignored, copy
+the displayed linked cell (including its updated baseline) before editing. The
+updated source is displayed when the baseline changes; stale headers cause safe
+conflicts rather than implicit overwrite. Loading does not execute; a file-only
+update on Run executes the displayed updated source even if replacement is ignored.
+
+Resolve conflicts by preserving both copies, reconciling their contents, and
+making the cell and file identical before running again. Or load the file into
+a new cell with `%load_clean path.py` and transfer intended edits manually.
+Deletion is an error, not an instruction to recreate a previously linked file.
+
+Updates use a temporary sibling and atomic replacement, preserve permission bits,
+and recheck file bytes just before replacement. This detects edits during staging
+but is not a filesystem compare-and-swap: an external writer in the final interval
+can still race. Avoid simultaneous saves while running. Hard-linked aliases are
+not updated by replacement; extended attributes/ACLs are not preserved. Parents
+must be trusted and stable. Git cannot restore arbitrary overwritten uncommitted
+work, so it does not replace these checks.
+
+Build/check strip a linked header and validate the saved cell body without reading
+or writing its linked file. Even an executed build cannot synchronize that file.
+Remove or tag standalone `%load_clean path.py` loader cells `load-clean-remove`;
+export rejects them and retains the generated linked code cells instead.
+This exports a notebook snapshot, not necessarily the latest on-disk module: run
+and save the notebook before exporting. Existing selective embedding below remains
+available, but AST regeneration is not used for linked-file synchronization.
+
+Execution uses the notebook namespace, not an imported module namespace. Code
+depending on package-relative imports, module `__file__`, or package initialization
+may require adaptation; use ordinary imports for such modules. Modules with
+top-level effects run those effects on every linked-cell execution.
+
+## Legacy import-selection modes
+
+For the older import-selection syntax, the cell magic accepts `default`, `inline`,
+and `skeleton`; omitting a header and providing an import retains its old behavior.
 
 ```python
 %%load_clean
@@ -49,6 +113,9 @@ These operations do not prove that generated code is safe or semantically
 identical under every runtime environment.
 
 ## Save a prototype as a module
+
+This older creation-only command remains available for compatibility. Prefer
+linked cells above for automatic sync and execution on Run.
 
 ```python
 %%load_clean_save --preview helpers.py

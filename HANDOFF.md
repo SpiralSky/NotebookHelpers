@@ -4,6 +4,19 @@ Updated: 2026-11-14. P3 baseline: `426802d` on `main`.
 
 ## Current state and next-session request
 
+2026-11-15: sync-on-run is now the primary workflow. `%%load_clean path.py`
+synchronizes and executes a whole module; `%load_clean path.py` loads an existing
+file into a new linked cell without execution. A persisted `--base` hash selects
+sync direction and rejects differing simultaneous edits with a diff. Existing
+magics remain compatible. Linked export uses the notebook body without reading
+or writing its source file. Source updates use IPython replacement requests and
+display a fallback cell; no frontend GUI hooks or watchers are implemented.
+Whole-file ownership is deliberate; individual function merging is unsupported.
+Verification: 117 tests passed without skips; isolated sdist/wheel build passed.
+A real kernel verified create, save, source refresh, replacement payloads, and
+conflict refusal. GUI application of replacement requests remains unverified.
+See current README, workflow and usage; the implementation history below is older.
+
 P1 is complete in `d672aad`: `%%load_clean_save`
 previews or atomically creates a new whole-cell module without execution;
 existing paths are refused and replacement is unsupported. Parents must exist,
