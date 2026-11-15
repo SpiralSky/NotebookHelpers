@@ -4,7 +4,27 @@ Created: 2026-11-14 · Revisited: 2026-11-14 · Revision: 3
 
 ## Current decision — 2026-11-15
 
-Build configurability is the current bounded follow-up. The user explicitly
+Post-release review: v0.0.5 is published. Keep the core/tooling split and separate
+pure import-link syntax from synchronization/execution. The user authorized
+`# noqa: F401` on generated identifying imports and import-linked exports to
+protect intentionally unused bindings; other user-facing changes need approval.
+Mode simplification, primary-link status/version diagnostics, and runnable sync
+onboarding are recommendations, not accepted work.
+
+Review method: compare the complete run/edit/refresh/export journey and user
+feedback, rather than infer frontend reliability from kernel tests. This follows
+the [DevEx framework's](https://michaelagreiler.com/pages/publications/media/DevEx-WhatDrivesProductivity.pdf)
+use of developer perceptions together with workflow evidence; its application
+here is a judgment, not evidence of measured UX benefit. The
+[Jupyter protocol](https://jupyter-client.readthedocs.io/en/stable/messaging.html#payloads-deprecated)
+still marks editor-action payloads deprecated without an implemented replacement,
+so verify a real frontend before adding another integration layer. JupyterLab
+4.6.6 in headless Brave now verifies visible replacement, both sync directions,
+quiet success and conflict refusal; the user's PyCharm frontend is unverified.
+Real Ruff autofix and Flake8 checks verified F401 marker behavior. No human
+usefulness measurement or claim of universal IDE support is made.
+
+Build configurability has shipped. The user explicitly
 deferred decisions about removing or renaming notebook modes: retain all syntax
 and behavior while adding orthogonal export controls. Default cleaning remains
 unchanged. Provide explicit resolve/strip/remove/keep magic policies, import-only
@@ -48,7 +68,8 @@ module code retains its ordinary output. This supersedes the output fallback.
 
 IPython requests cell replacement; it cannot acknowledge frontend application.
 Unsupported frontends can leave cells stale without an output fallback. This is a
-known usability limit, not evidence of a verified JupyterLab/VS Code GUI flow.
+known usability limit. JupyterLab UI is verified as described above; PyCharm and
+VS Code UI flows remain unverified.
 Writes validate syntax, recheck disk bytes and publish atomically; an external
 writer after the final comparison can still race. Runtime errors leave synced
 edits saved. Human usefulness remains unmeasured; current technical acceptance

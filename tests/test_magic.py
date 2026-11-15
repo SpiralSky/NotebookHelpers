@@ -180,7 +180,7 @@ def test_bare_import_creates_editable_selected_link(shell, tmp_path, monkeypatch
     assert shell.user_ns['result']() == 3
     header, source = calls[-1].split('\n', 1)
     assert header == '%%load_clean'
-    assert source.startswith('from magic_example import answer as result\n# Referenced Source: sha256:')
+    assert source.startswith('from magic_example import answer as result  # noqa: F401\n# Referenced Source: sha256:')
     shell.run_cell_magic('load_clean', header[len('%%load_clean '):], source.replace('return VALUE', 'return VALUE + 2'))
     assert shell.user_ns['result']() == 5
     assert (tmp_path / 'magic_example.py').read_text() == 'VALUE = 3\ndef answer():\n    return VALUE + 2\n'

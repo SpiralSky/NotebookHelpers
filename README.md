@@ -25,7 +25,7 @@ a normal import in another cell:
 
 ```python
 %%load_clean
-from helpers import double
+from helpers import double  # noqa: F401
 ```
 
 This runs the module and replaces the request with an editable linked definition.
@@ -37,7 +37,9 @@ The generated cell keeps the import immediately below the magic, then a separate
 `# Referenced Source: sha256:...` comment and the editable source. Keep the import
 and reference comment, then edit/run normally. The comment records the last
 synchronized source, not a Git commit; save the notebook to retain it across
-kernel restarts. The import determines the destination on each Run. Cell-only
+kernel restarts. Generated identifying imports carry `# noqa: F401` to mark them
+as intentional for PyCharm, Ruff and Flake8 even when the cell does not use the
+imported binding. The import determines the destination on each Run. Cell-only
 edits save to the file; file-only edits refresh the cell and run the new source;
 different edits on both sides produce an error before writing or executing.
 Run your tests or calculations in separate cells, for example `double(21)`.

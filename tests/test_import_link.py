@@ -34,7 +34,7 @@ def test_selected_import_executes_with_package_dependencies_and_alias(module):
     assert namespace['twice'].__module__ == 'linked_project.helpers'
     assert set(namespace) == {'twice'}
     header, body = link.cell.split('\n', 1)
-    assert body.startswith(link.statement + '\n# Referenced Source: sha256:')
+    assert body.startswith(link.statement + '  # noqa: F401\n# Referenced Source: sha256:')
     assert header == '%%load_clean'
     assert parse_link_cell(header[len('%%load_clean '):], body) == (
         link.statement, None, fingerprint(link.source), link.source)

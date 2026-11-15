@@ -12,7 +12,8 @@ from .api import resolve_cell, save_cell
 from .parser import parse_import, parse_load_clean_cell
 from .resolver import resolve_module
 from .linked import load_link, parse_header, sync_link
-from .import_link import parse_link_cell, synchronize, execute as execute_import_link
+from ._import_link_format import parse_link_cell
+from .import_link import synchronize, execute as execute_import_link
 
 
 def _fingerprint(path: Path) -> str:

@@ -8,27 +8,16 @@ import importlib
 from importlib.machinery import PathFinder
 import importlib.util
 from pathlib import Path
-import re
-import shlex
 import sys
 
 from .linked import canonical, destination, fingerprint, sync_link, validate, _replace
-
-
-def import_node(statement: str):
-    tree = ast.parse(statement)
-    if len(tree.body) != 1:
-        raise ValueError('Use one import statement to identify the linked source')
-    node = tree.body[0]
-    if isinstance(node, ast.Import) and len(node.names) == 1:
-        return node, node.names[0].name
-    if isinstance(node, ast.ImportFrom) and node.module and not node.level:
-        if any(item.name == '*' for item in node.names):
-            raise ValueError('Use explicit names instead of a wildcard for editable links')
-        if len({item.name for item in node.names}) != len(node.names):
-            raise ValueError('Each linked name must occur only once')
-        return node, node.module
-    raise ValueError('Use import module or from module import name (absolute imports)')
+# Keep earlier imports of these syntax helpers compatible.
+from ._import_link_format import (
+    format_link_cell,
+    import_node,
+    parse_link_header as parse_link_header,
+    parse_link_cell as parse_link_cell,
+)
 
 
 def module_path(name: str) -> Path:
@@ -140,64 +129,7 @@ class ImportLink:
 
     @property
     def cell(self):
-        return f'%%load_clean\n{self.statement}\n# Referenced Source: sha256:{fingerprint(self.source)}\n\n{self.source}'
-
-
-def parse_link_header(line: str):
-    args = shlex.split(line)
-    if not args or args[0] != '--import':
-        return None
-    if len(args) != 6 or args[2] != '--file' or args[4] != '--base' or not re.fullmatch('[0-9a-f]{64}', args[5]):
-        raise ValueError('Invalid generated import-link header; retain --import, --file and --base')
-    import_node(args[1])
-    return args[1], args[3], args[5]
-
-
-def parse_link_cell(line: str, cell: str | None):
-    """Read comment-based links and earlier argument layouts without file access."""
-    legacy = parse_link_header(line)
-    if legacy is not None:
-        if cell is None:
-            raise ValueError('Generated import links require a cell body')
-        return (*legacy, cell)
-    args = shlex.split(line)
-    if args and args[0] != '--file':
-        return None
-    if args and (len(args) != 4 or args[2] != '--base' or not re.fullmatch('[0-9a-f]{64}', args[3])):
-        raise ValueError('Invalid generated import-link header; retain --file and --base')
-    if cell is None:
-        if not args:
-            return None
-        raise ValueError('Generated import links require a cell body')
-    tree = ast.parse(cell)
-    if not tree.body:
-        raise ValueError('Keep the import statement below %%load_clean')
-    node = tree.body[0]
-    statement = ast.unparse(node)
-    import_node(statement)
-    lines = cell.splitlines(keepends=True)
-    # The generated separator belongs to the link, not the editable source.
-    if lines[node.end_lineno - 1].strip().endswith(';') or any(
-        other.lineno == node.end_lineno for other in tree.body[1:]
-    ):
-        raise ValueError('Put the link import on its own line')
-    remaining = lines[node.end_lineno:]
-    if not args:
-        reference = re.fullmatch(r'# Referenced Source: sha256:([0-9a-f]{64})', remaining[0].strip()) if remaining else None
-        if reference is None:
-            if len(tree.body) > 1 or any(text.strip().startswith('# Referenced Source:') for text in remaining):
-                raise ValueError('Keep the # Referenced Source: sha256:HASH comment immediately below the import; preserve edits before reloading a link')
-            return None  # An initial import request, not yet an editable link.
-        path, baseline = None, reference[1]
-        remaining = remaining[1:]
-    else:
-        path, baseline = args[1], args[3]
-    source = ''.join(remaining)
-    if source.startswith('\r\n'):
-        source = source[2:]
-    elif source.startswith('\n'):
-        source = source[1:]
-    return statement, path, baseline, source
+        return format_link_cell(self.statement, self.source)
 
 
 def synchronize(statement: str, local: str | None = None, baseline: str | None = None, expected_path: str | None = None) -> ImportLink:

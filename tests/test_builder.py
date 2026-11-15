@@ -226,7 +226,7 @@ def test_import_link_exports_import_without_source_access(tmp_path, legacy):
     elif legacy == 'file':
         source = f'%%load_clean --file {shlex.quote(str(tmp_path / "missing.py"))} --base {fingerprint(body)}\nfrom unavailable import double\n\n{body}'
     cell = Cell(cell_type='code', source=source, metadata={}, outputs=[], execution_count=None)
-    assert clean_notebook(Notebook([cell])).cells[0].source == 'from unavailable import double'
+    assert clean_notebook(Notebook([cell])).cells[0].source == 'from unavailable import double  # noqa: F401'
     assert not (tmp_path / 'missing.py').exists()
 
 

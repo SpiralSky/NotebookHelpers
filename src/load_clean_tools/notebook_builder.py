@@ -15,7 +15,7 @@ from load_clean.api import resolve_cell
 from load_clean.parser import parse_load_clean_cell
 from load_clean.linked import parse_header, validate
 from load_clean.linked import fingerprint
-from load_clean.import_link import import_node, parse_link_cell
+from load_clean._import_link_format import parse_link_cell, protected_import
 
 
 @dataclass(frozen=True)
@@ -115,11 +115,10 @@ def resolve_cells(notebook: Any, *, source_roots: list[str | Path] | None = None
                     statement, _, baseline, source = imported
                     if fingerprint(source) != baseline:
                         raise ValueError('Import-linked cell has unsynchronized edits; run it and save the notebook before export')
-                    cell.source = statement
+                    cell.source = protected_import(statement)
                     continue
                 if not line:
-                    import_node(body)
-                    cell.source = body.strip()
+                    cell.source = protected_import(body)
                     continue
                 if parse_header(line) is not None:
                     # Export the saved notebook snapshot; never synchronize or
