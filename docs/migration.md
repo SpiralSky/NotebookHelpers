@@ -5,8 +5,10 @@
 The primary interface is now a bare `%%load_clean` with `import module` or
 `from module import name`. The first run loads an editable whole-module or
 selected-definition link and executes in module context. Keep the generated
-`--file` and `--base` header and the import statement below it. Earlier `--import`
-headers still work and convert automatically on Run. Sync status and fallback
+bare magic, import statement, and separate `# Referenced Source: sha256:...`
+comment. The comment holds a source baseline, not a Git commit. Import links
+resolve their destination from the import each Run. Earlier `--import` and
+`--file`/`--base` headers still work and convert automatically on Run. Sync status and fallback
 source displays have been removed; user code can still produce output.
 Each Run synchronizes the changed side;
 conflicting edits to the selected source error before writing or executing.

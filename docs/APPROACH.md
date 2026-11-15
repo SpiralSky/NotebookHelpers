@@ -28,7 +28,7 @@ cell/file synchronization the primary workflow. Repeatedly switching load/save
 commands is unwanted. A linked cell contains one complete Python module and an
 explicit source hash. Cell-only edits save, file-only edits refresh and execute,
 identical edits converge, and differing edits on both sides stop with a diff.
-The hash persists in the notebook header; Git commits are optional history, not
+The hash persists in the notebook cell; Git commits are optional history, not
 the synchronization baseline. No automatic merge or background watcher is needed.
 
 This first implementation owns whole files, not AST-selected functions inside
@@ -38,8 +38,12 @@ only its header and never synchronizes files. Existing import and creation-only
 commands remain compatible but are no longer the recommended authoring workflow.
 
 User feedback follow-up: generated import links retain a Python import below the
-magic instead of a `--import` argument. Keep file and baseline options for guarded
-sync. Legacy headers remain readable. Successful load/sync operations are silent;
+magic instead of a `--import` argument. Further feedback removes destination
+pinning for import links and moves the baseline into a separate
+`# Referenced Source: sha256:...` comment below the import. Each Run resolves the
+import's current destination. The persisted baseline still protects sync across
+restarts; it is a source digest, not a Git commit. Path links retain their explicit
+path/header interface. Legacy headers remain readable. Successful load/sync operations are silent;
 module code retains its ordinary output. This supersedes the output fallback.
 
 IPython requests cell replacement; it cannot acknowledge frontend application.

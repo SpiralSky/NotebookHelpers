@@ -30,8 +30,9 @@ from helpers import magnitude
 ```
 
 Run once. The module executes and the tool requests an editable replacement cell
-containing the import statement followed by the function source, plus a generated
-header. Keep the import and the header's file path and baseline. Edit the function and run again:
+containing the import statement, a separate `# Referenced Source: sha256:...`
+baseline comment, and the function source. Keep the import and comment.
+The import determines the destination; edit the function and run again:
 changes synchronize to its definition in the file, preserving the `math` import
 and unrelated definitions. The function runs with the module's globals and package
 context. Aliases and multiple names work, for example
@@ -72,8 +73,9 @@ are the primary interface for existing modules and selected functions.
 
 Edit the linked cell and press Run: it validates, writes the file, and executes.
 Edit the file instead and press Run on the unchanged cell: it requests a refreshed
-cell, displays the updated source, and executes the file version. The baseline
-lives in the header, so save the notebook to retain it across restarts.
+cell and executes the file version. Import links keep their baseline in the
+reference comment; path links keep it in the header. Save the notebook to retain
+the baseline across restarts. No fallback source is displayed.
 
 No background synchronization occurs. Ordinary notebook Save only saves the
 notebook, and ordinary file Save only saves the module. Running the linked cell

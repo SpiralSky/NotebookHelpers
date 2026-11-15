@@ -179,8 +179,8 @@ def test_bare_import_creates_editable_selected_link(shell, tmp_path, monkeypatch
     shell.run_cell_magic('load_clean', '', 'from magic_example import answer as result')
     assert shell.user_ns['result']() == 3
     header, source = calls[-1].split('\n', 1)
-    assert '--import' not in header
-    assert source.startswith('from magic_example import answer as result\n\ndef answer')
+    assert header == '%%load_clean'
+    assert source.startswith('from magic_example import answer as result\n# Referenced Source: sha256:')
     shell.run_cell_magic('load_clean', header[len('%%load_clean '):], source.replace('return VALUE', 'return VALUE + 2'))
     assert shell.user_ns['result']() == 5
     assert (tmp_path / 'magic_example.py').read_text() == 'VALUE = 3\ndef answer():\n    return VALUE + 2\n'
@@ -207,15 +207,21 @@ def test_bare_module_import_binds_module(shell, monkeypatch):
     assert shell.user_ns['helpers'].answer() == 9
 
 
-def test_legacy_import_header_migrates_silently(shell, tmp_path, monkeypatch, capsys):
+@pytest.mark.parametrize('legacy_import', [False, True])
+def test_legacy_import_header_migrates_silently(shell, tmp_path, monkeypatch, capsys, legacy_import):
     import shlex
     from load_clean.import_link import fingerprint, synchronize
 
     link = synchronize('from magic_example import answer as result')
-    line = f'--import {shlex.quote(link.statement)} --file {shlex.quote(str(link.path))} --base {fingerprint(link.source)}'
+    line = f'--file {shlex.quote(str(link.path))} --base {fingerprint(link.source)}'
+    body = link.statement + '\n\n' + link.source
+    if legacy_import:
+        line = f'--import {shlex.quote(link.statement)} ' + line
+        body = link.source
     calls = []
     monkeypatch.setattr(shell, 'set_next_input', lambda source, replace: calls.append(source))
-    shell.run_cell_magic('load_clean', line, link.source)
+    shell.run_cell_magic('load_clean', line, body)
     assert shell.user_ns['result']() == 3
-    assert '--import' not in calls[-1].split('\n', 1)[0]
+    assert calls[-1].split('\n', 1)[0] == '%%load_clean'
+    assert calls[-1].splitlines()[2].startswith('# Referenced Source: sha256:')
     assert capsys.readouterr().out == ''

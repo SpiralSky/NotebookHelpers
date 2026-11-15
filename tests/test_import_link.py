@@ -34,10 +34,10 @@ def test_selected_import_executes_with_package_dependencies_and_alias(module):
     assert namespace['twice'].__module__ == 'linked_project.helpers'
     assert set(namespace) == {'twice'}
     header, body = link.cell.split('\n', 1)
-    assert body.startswith(link.statement + '\n\n')
-    assert '--import' not in header
+    assert body.startswith(link.statement + '\n# Referenced Source: sha256:')
+    assert header == '%%load_clean'
     assert parse_link_cell(header[len('%%load_clean '):], body) == (
-        link.statement, str(module), fingerprint(link.source), link.source)
+        link.statement, None, fingerprint(link.source), link.source)
 
 
 def test_selected_write_preserves_unrelated_source_and_external_edits(module):
@@ -57,7 +57,7 @@ def test_multiline_link_import_and_leading_source_whitespace(module):
     header, body = link.cell.split('\n', 1)
     body = body.replace(link.statement, 'from linked_project.helpers import (\n    double as twice,\n    other,\n)')
     parsed = parse_link_cell(header[len('%%load_clean '):], body)
-    assert parsed == (link.statement, str(module), fingerprint(link.source), link.source)
+    assert parsed == (link.statement, None, fingerprint(link.source), link.source)
     module.write_text('\n\n' + module.read_text())
     whole = synchronize('import linked_project.helpers as helpers')
     header, body = whole.cell.split('\n', 1)
@@ -82,6 +82,36 @@ def test_selected_conflict_does_not_modify_file(module):
     assert 'linked_project.helpers' not in sys.modules
     refreshed = sync_edit(link, link.source)
     assert 'x * 3' in refreshed.source
+
+
+def test_comment_baseline_survives_reload_and_import_redirect(module):
+    link = synchronize('from linked_project.helpers import double')
+    header, body = link.cell.split('\n', 1)
+    # Reconstruct the link using only saved cell text; no kernel state is needed.
+    statement, path, baseline, local = parse_link_cell(header[len('%%load_clean'):], body)
+    module.write_text(module.read_text().replace('x * FACTOR', 'x * FACTOR + 2'))
+    refreshed = synchronize(statement, local, baseline, path)
+    assert 'x * FACTOR + 2' in refreshed.source
+    # The import may deliberately point at another module with the old baseline.
+    target = module.with_name('alternate.py')
+    target.write_text(module.read_text().replace('x * FACTOR + 2', 'x * FACTOR'))
+    redirected = body.replace('linked_project.helpers', 'linked_project.alternate').replace('x * FACTOR', 'x * FACTOR + 5')
+    statement, path, baseline, local = parse_link_cell('', redirected)
+    saved = synchronize(statement, local, baseline, path)
+    assert saved.path == target
+    assert 'x * FACTOR + 5' in target.read_text()
+    assert 'x * FACTOR + 2' in module.read_text()
+
+
+@pytest.mark.parametrize('replacement', ['', '# Referenced Source: sha256:invalid\n', '# Referenced Source: sha256:' + '0' * 64 + ' trailing\n'])
+def test_missing_or_invalid_comment_baseline_refused(module, replacement):
+    link = synchronize('from linked_project.helpers import double')
+    _, body = link.cell.split('\n', 1)
+    body = body.replace(f'# Referenced Source: sha256:{fingerprint(link.source)}\n', replacement)
+    before = module.read_bytes()
+    with pytest.raises(ValueError, match='Referenced Source'):
+        parse_link_cell('', body)
+    assert module.read_bytes() == before
 
 
 def test_dependency_only_change_uses_current_module(module):

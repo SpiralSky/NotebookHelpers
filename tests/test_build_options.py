@@ -31,7 +31,7 @@ def test_strip_import_link_is_explicit_snapshot_even_with_edits(tmp_path):
     source = ImportLink('from missing import double', tmp_path / 'missing.py', body, body, '').cell
     nb = nbformat.v4.new_notebook(cells=[code(source.replace('x * 2', 'x * 3'))])
     clean_notebook(nb, options=CleanOptions(load_clean='strip'))
-    assert nb.cells[0].source == 'from missing import double\n\n' + body.replace('x * 2', 'x * 3')
+    assert nb.cells[0].source == source.split('\n', 1)[1].replace('x * 2', 'x * 3')
     assert not (tmp_path / 'missing.py').exists()
 
 

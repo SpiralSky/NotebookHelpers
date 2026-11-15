@@ -4,6 +4,19 @@ Updated: 2026-11-15. Historical P3 baseline: `426802d` on `main`.
 
 ## Current state and next-session request
 
+Comment-baseline follow-up: import-linked cells now generate a bare `%%load_clean`,
+the identifying import on the next line, and a separate
+`# Referenced Source: sha256:HASH` comment before the editable source. User accepts
+destination redirection: import links resolve the destination each Run without a
+pinned path. The comment persists the baseline across kernel restarts; it is a
+source digest, not a Git commit. Both earlier argument layouts convert on Run.
+Whole-file path links retain their explicit path/header interface. Loading/sync
+remain silent and export reads saved text without accessing source files.
+Verification: 192 tests passed without skips; isolated sdist/wheel builds passed.
+Coverage includes baseline recovery from saved text, intentional import redirect,
+invalid/missing reference refusal, old-layout migration and static export.
+This change is committed locally after v0.0.4; it is not in that published tag.
+
 Release follow-up: package version is 0.0.4 for the import-body/silent-sync fix,
 with matching `v0.0.4` tag. Isolated sdist/wheel builds passed; a fresh core-only
 wheel installation outside the checkout verified version metadata, both CLI

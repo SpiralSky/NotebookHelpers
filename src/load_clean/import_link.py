@@ -140,7 +140,7 @@ class ImportLink:
 
     @property
     def cell(self):
-        return f'%%load_clean --file {shlex.quote(str(self.path))} --base {fingerprint(self.source)}\n{self.statement}\n\n{self.source}'
+        return f'%%load_clean\n{self.statement}\n# Referenced Source: sha256:{fingerprint(self.source)}\n\n{self.source}'
 
 
 def parse_link_header(line: str):
@@ -154,18 +154,20 @@ def parse_link_header(line: str):
 
 
 def parse_link_cell(line: str, cell: str | None):
-    """Read current links and legacy --import links without accessing files."""
+    """Read comment-based links and earlier argument layouts without file access."""
     legacy = parse_link_header(line)
     if legacy is not None:
         if cell is None:
             raise ValueError('Generated import links require a cell body')
         return (*legacy, cell)
     args = shlex.split(line)
-    if not args or args[0] != '--file':
+    if args and args[0] != '--file':
         return None
-    if len(args) != 4 or args[2] != '--base' or not re.fullmatch('[0-9a-f]{64}', args[3]):
+    if args and (len(args) != 4 or args[2] != '--base' or not re.fullmatch('[0-9a-f]{64}', args[3])):
         raise ValueError('Invalid generated import-link header; retain --file and --base')
     if cell is None:
+        if not args:
+            return None
         raise ValueError('Generated import links require a cell body')
     tree = ast.parse(cell)
     if not tree.body:
@@ -179,12 +181,23 @@ def parse_link_cell(line: str, cell: str | None):
         other.lineno == node.end_lineno for other in tree.body[1:]
     ):
         raise ValueError('Put the link import on its own line')
-    source = ''.join(lines[node.end_lineno:])
+    remaining = lines[node.end_lineno:]
+    if not args:
+        reference = re.fullmatch(r'# Referenced Source: sha256:([0-9a-f]{64})', remaining[0].strip()) if remaining else None
+        if reference is None:
+            if len(tree.body) > 1 or any(text.strip().startswith('# Referenced Source:') for text in remaining):
+                raise ValueError('Keep the # Referenced Source: sha256:HASH comment immediately below the import; preserve edits before reloading a link')
+            return None  # An initial import request, not yet an editable link.
+        path, baseline = None, reference[1]
+        remaining = remaining[1:]
+    else:
+        path, baseline = args[1], args[3]
+    source = ''.join(remaining)
     if source.startswith('\r\n'):
         source = source[2:]
     elif source.startswith('\n'):
         source = source[1:]
-    return statement, args[1], args[3], source
+    return statement, path, baseline, source
 
 
 def synchronize(statement: str, local: str | None = None, baseline: str | None = None, expected_path: str | None = None) -> ImportLink:
